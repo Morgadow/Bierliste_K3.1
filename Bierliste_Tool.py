@@ -2,19 +2,49 @@
 # -*- coding: utf-8 -*-
 
 import os
+import sys
+import datetime
+import shutil
 import tkinter as tk
+import openpyxl as opxl
 from configparser import ConfigParser
 import logger as logging
+from tkinter import messagebox
 
 
-# todo gui
-# todo import excel file
-# todo export excel file (load example file)
-# todo read settings file
-# todo
-#
+# todo export excel sheet "Stand 12.01.2020" --> format
+# todo export excel "Neue Tabelle 12.01.2020" --> format
+# todo format: second line gray, all lines, statistic + balance bold
+# todo hilfe/readme file.pfd mit anleitung
+# todo version info und create excecutible
+# todo child backgrounds
+# todo button sytles auslagern als global?
+# todo style: statistik fett gedruckt, 0er werden nicht geschrieben
+# todo bevor fill new excel try to sort --> k3.1 on top, room descending
 
-NAME_SETTINGS_FILE = "settings.ini"
+# version
+__major__ = 1  # for major interface/format changes
+__minor__ = 0  # for minor interface/format changes
+__release__ = 0  # for tweaks, bug-fixes, or development
+__version__ = '%d.%d.%d' % (__major__, __minor__, __release__)
+__version_info__ = tuple([int(num) for num in __version__.split('.')])
+__author__ = "Simon Schmid"
+__date__ = '13.01.2020'
+
+# globals
+SETTINGS_FILE = "settings.ini"
+RESOURCE_FOLDER = 'resources'
+EXPORT_FOLDER = 'Bierlisten'
+EXAMPLE_EXCEL = 'Example_file.xlsx'
+HELP_FILE = 'Anleitung.pdf'
+
+EXCEL_START_ROW = 3
+STD_VALUES = {'room': '', 'balance': 0.0, 'beers': 0, 'radler': 0, 'mate': 0, 'pali': 0, 'spezi': 0}
+STD_COLS = {'room': 'A', 'name': 'B', 'balance': 'C',  'new_beer': 'D', 'new_radler': 'E', 'new_mate': 'F', 'new_pali': 'G', 'new_spezi': 'H',  'beers': 'I', 'radler': 'J', 'mate': 'K', 'pali': 'L', 'spezi': 'M'}
+
+# size of main self.root (optimal sizes for chosen background image)
+HEIGHT = 450
+WIDTH = 600
 
 
 def handle_excep(exception, with_tb=True):
@@ -25,11 +55,38 @@ def handle_excep(exception, with_tb=True):
         logging.Logger.static_critical(traceback.format_exc())
 
 
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+
+def select_file():
+    try:
+        from tkinter import filedialog
+        file = os.path.normpath(os.path.abspath(filedialog.askopenfilename(title="Select file", filetypes=(("Excel file", "*.xlsx *.xls *xlsm"), ("Alle Dateien", "*.*")))))
+        if file is not None and file != '' and os.path.isfile(file):
+            logging.Logger.static_info("Selected file: {}".format(file))
+            return file
+        else:
+            logging.Logger.static_warning("Keine Datei gewählt!")
+            return None
+    except Exception as e:
+        handle_excep(e, with_tb=True)
+        return None
+
+
 class BierListeTool:
 
     def __init__(self):
 
+        os.system("cls")
         self.logger = logging.Logger(level='DEBUG')
+        self.logger.info("----- Starte Bierhelper Tool ----- \n")
 
         self.prices = SettingsGroup()
         self.prices.beer = None
@@ -37,9 +94,13 @@ class BierListeTool:
         self.prices.mate = None
         self.prices.pali = None
         self.prices.spezi = None
-        self.read_settings_file(NAME_SETTINGS_FILE)
+        self.read_settings_file(os.path.join(RESOURCE_FOLDER, SETTINGS_FILE))
 
-        self.gui = BierlisteToolGUI()
+        self.today = datetime.datetime.now().strftime('%d.%m.%Y')
+
+        self.persons_data = []
+
+        self._build_GUI()
 
     def read_settings_file(self, settings_file):
         """
@@ -51,9 +112,8 @@ class BierListeTool:
         if not os.path.isfile(settings_file):
             raise FileNotFoundError("CRITICAL: Settings file not found: " + str(settings_file))
 
-        self.logger.debug("Reading settings file:")
-
         # init configparser and get information
+        self.logger.debug("Reading settings file:")
         config = ConfigParser()
         config.read(settings_file)
 
@@ -71,29 +131,451 @@ class BierListeTool:
             self.logger.error("Could not read Settings file!")
             handle_excep(e, with_tb=True)
 
+    def _build_GUI(self):
+        """ Builds gui and holds mainloop """
 
-class BierlisteToolGUI:
-
-    def __init__(self):
-        self.logger = logging.Logger()
         self.logger.debug("Building GUI:")
 
+        self.root = tk.Tk()
+        self.root.title("Bierwart Helper")
+        self.root.resizable(False, False)
+        tk.Canvas(self.root, height=HEIGHT, width=WIDTH).pack()
 
+        # background label for background image and program icon
+        try:
+            self.root.wm_iconbitmap(bitmap=resource_path(os.path.join(RESOURCE_FOLDER, "icon.ico")))
+            background_image = tk.PhotoImage(file=resource_path(os.path.join(RESOURCE_FOLDER, "background.png")))
+            tk.Label(self.root, image=background_image).place(relwidth=1, relheight=1)
+        except Exception as e:
+            self.logger.error("Konnte Hintergrund oder Icon nicht setzen, stelle sicher, dass die Dateien im Ordner liegen!")
+            handle_excep(e)
 
-        # gui here
-        self.logger.info("Sucesfully builded GUI")
+        import_excel_btn = tk.Button(self.root, bd=5, font=("Helvetica 9 bold"), bg='gray', text="Import Excel", command=lambda: self._import_excel())
+        import_excel_btn.place(relx=0.2125, rely=0.9, relwidth=0.175, relheight=0.075)
+
+        export_excel_btn = tk.Button(self.root, font=("Helvetica 9 bold"), bd=5, bg='gray', text="Export to Excel", command=lambda: self._export_excel())
+        export_excel_btn.place(relx=0.6125, rely=0.9, relwidth=0.175, relheight=0.075)
+
+        new_person_btn = tk.Button(self.root, font=("Helvetica 9 bold"), bd=5, bg='gray', text="Neuer Drinker", command=lambda: self._cb_new_person())
+        new_person_btn.place(relx=0.4125, rely=0.9, relwidth=0.175, relheight=0.075)
+
+        # help and credits
+        help_btn = tk.Button(self.root, text="Hilfe", bg='lightgrey', bd=2, command=lambda: self._cb_open_help(HELP_FILE))
+        help_btn.place(relx=0.025, rely=0.925, relwidth=0.1, relheight=0.05)
+        tk.Label(self.root, font=("Arial", 7), text="Version: {}".format(__version__), bg="lightgrey").place(relx=0.855, rely=0.925, relwidth=0.12, relheight=0.05)
+
+        self.logger.info("Successfully build GUI")
         tk.mainloop()
+
+    def _import_excel(self):
+        """
+        Choose excel file with file dialog and if needed choose a sheet over child window with buttons
+        :return: None
+        """
+
+        # choose excel file over filedialog
+        excel_file = select_file()
+        if excel_file is not None:
+
+            # select sheet in excel
+            workbook = opxl.load_workbook(filename=excel_file)
+            if len(workbook.sheetnames) == 1:
+                self._read_excel_file(excel_file, workbook.sheetnames[0])
+            elif len(workbook.sheetnames) < 1:  # no sheet, should not happen
+                messagebox.showwarning('Fehler', "Keine Tabelle in Excel Datei gefunden!")
+                return
+            else:
+                self.logger.debug("Build child window for selecting excel sheet to import:")
+                child = tk.Toplevel()
+                child.resizable(False, False)
+                tk.Canvas(child, height=150, width=350).pack()
+                child.title("Select Excel Sheet")
+                child.wm_iconbitmap(bitmap=resource_path(os.path.join(RESOURCE_FOLDER, "child_icon.ico")))
+                background_image = tk.PhotoImage(file=resource_path(os.path.join(RESOURCE_FOLDER, "new_per_child.png")))
+                tk.Label(child, image=background_image).place(relwidth=1, relheight=1)
+
+                side, top, spacer, elem_width, elem_height = 0.0, 0.01, 0.033, 0.45, 0.175
+                sheet_btns = []
+                for index, elem in enumerate(workbook.sheetnames):
+                    sheet_btns.append(tk.Button(child, text=elem, font='Helvetica 9', bg='gray', bd=2,
+                                                command=lambda c=index: self._read_excel_file(excel_file, sheet_btns[c].cget('text'), child)))
+                    sheet_btns[-1].place(relx=side + spacer, rely=top, relwidth=elem_width, relheight=elem_height)
+                    side += elem_width + spacer
+                    if index % 2:
+                        top += spacer + elem_height
+                        side = 0
+
+    def _create_person_btns(self):
+        """ Creates buttons for all persons in root """
+        self.logger.debug("Starting to update player buttons:")
+        spacer, width, height = 0.025, 0.17, 0.05
+        try:
+            for btn in self.person_btns:
+                btn.destroy()
+        except Exception as e:  # throws error when called first time
+            pass
+        self.person_btns = []
+        for i in range(len(self.persons_data)):
+            self.person_btns.append(tk.Button(self.root, font="Helvetica 8 bold", text=self.persons_data[i].name, command=lambda c=i: self._cb_edit_person(self.person_btns[c].cget('text'))))
+            # self.person_btns.append(tk.Button(self.root, text=self.persons_data[i].name, command=lambda c=i: self._cb_edit_person(self.person_btns[c].cget('text'))))
+            if self.persons_data[i].updated:
+                self.person_btns[i].config(bg='lightgreen')
+            else:
+                self.person_btns[i].config(bg='tomato')
+
+        # place buttons
+        for i in range(len(self.person_btns)):
+            self.person_btns[i].place(relx=(i % 5)*(spacer+width)+spacer, rely=int(i/5)*(spacer+height)+spacer, relheight=height, relwidth=width)
+        self.logger.info("Updated player buttons")
+
+    def _cb_delete_person(self, child, name):
+        """
+        Deletes person from self.persons_data und recreates all person_btns
+        :param child: Tk.Toplevel(), child window for person
+        :param name: String, name of person
+        :return: None
+        """
+        try:
+            self.logger.debug("Trying to delete person " + name)
+            child.destroy()
+            del self.persons_data[self._get_person_data_by_name(name)]
+            self.logger.info("Deleted person: " + str(name))
+            self._create_person_btns()
+        except Exception as e:
+            messagebox.showerror('Fehler', "Could not delete person " + str(name))
+            handle_excep(e)
+
+    def _cb_new_person(self):
+        """
+        Callback for btn "New Person", Builds child window for creating a new person
+        :return: None
+        """
+        # build child window to insert information
+        self.logger.debug("Build child window for new person:")
+        child = tk.Toplevel()
+        child.resizable(False, False)
+        tk.Canvas(child, height=200, width=150).pack()
+        child.title("Lege neue Person an")
+        child.wm_iconbitmap(bitmap=resource_path(os.path.join(RESOURCE_FOLDER, "child_icon.ico")))
+        background_image = tk.PhotoImage(file=resource_path(os.path.join(RESOURCE_FOLDER, "new_per_child.png")))
+        tk.Label(child, image=background_image).place(relwidth=1, relheight=1)
+
+        top, spacer, elem_height = 0.2, 0.025, 0.1
+
+        # child elements
+        tk.Label(child, text='Name').place(relx=0.1, rely=top+spacer, relheight=elem_height, relwidth=0.8)
+        name_entry = tk.Entry(child)
+        name_entry.place(relx=0.1, rely=top+spacer+elem_height, relheight=elem_height, relwidth=0.8)
+
+        tk.Label(child, text='Zimmer').place(relx=0.1, rely=top+spacer*2+elem_height*2, relheight=elem_height, relwidth=0.8)
+        room_entry = tk.Entry(child)
+        room_entry.place(relx=0.1, rely=top+spacer*2+elem_height*3, relheight=elem_height, relwidth=0.8)
+
+        enter_btn = tk.Button(child, text="Bestätigen", bd=4, font="Helvetica 9 bold", bg="gray", command=lambda: self._create_new_person_func(child, name_entry.get(), room_entry.get()))
+        enter_btn.place(relx=(1-0.6)/2, rely=1-spacer*2-elem_height*1.75, relheight=elem_height*1.5, relwidth=0.6)
+
+    def _create_new_person_func(self, child, new_name, new_room):
+        """
+        Callback after finishing creating a new person, realoads person buttons on root window
+        :param child: Tk.Toplevel(), child window for new person to close
+        :param new_name: String, name of new person
+        :param new_room: String, room of new person
+        :return: None
+        """
+
+        try:
+            if new_name:
+                # for per in self.persons_data:  # check if name is already in use
+                #     if new_name == per.name:
+                #         self.logger.warning("Name already used!")
+                #         from tkinter import messagebox
+                #         tk.messagebox.showwarning("Vorsicht", "Name wird schon verwendet!")
+                #         break
+                child.destroy()
+                self.persons_data.append(Person(new_name, new_room))
+                self._create_person_btns()
+                self.logger.info("Added person with name: {}, room: {}".format(new_name, new_room))
+            else:
+                from tkinter import messagebox
+                messagebox.showwarning('Warning', "Name darf nicht leer sein!")
+        except Exception as e:
+            handle_excep(e)
+            from tkinter import messagebox
+            messagebox.showwarning('Warning', "Konnte keine Person eintragen!")
+
+    def _export_excel(self):
+        """ Copies example file to export folder and renames it to current date, if already existing, deletes it """
+
+        name_new_excel = 'Bierliste_K31_' + str(self.today) + '.xlsx'
+
+        # create export folder if not there already
+        if not os.path.isdir(EXPORT_FOLDER):
+            os.mkdir(EXPORT_FOLDER)
+            if os.path.isdir(EXPORT_FOLDER):
+                self.logger.debug("Created export folder: " + EXPORT_FOLDER)
+            else:
+                self.logger.error("Could not create export folder: " + EXPORT_FOLDER)
+                return
+
+        # delete file for today if already there
+        self.logger.debug("Starting to copy example file for export:")
+        new_excel_file = os.path.abspath(os.path.join(EXPORT_FOLDER, name_new_excel))
+        if os.path.isfile(new_excel_file):
+            try:
+                os.remove(new_excel_file)
+                if os.path.isfile(new_excel_file):
+                    self.logger.error("Could not delete already existing: {}".format(os.path.join(EXPORT_FOLDER, name_new_excel)))
+                    return
+                else:
+                    self.logger.debug("Deleted already existing file: {}".format(name_new_excel))
+            except Exception as e:
+                handle_excep(e)
+
+        # move example file and rename
+        try:
+            shutil.copy2(os.path.join(RESOURCE_FOLDER, EXAMPLE_EXCEL), os.path.join(EXPORT_FOLDER, name_new_excel))
+            if os.path.isfile(os.path.join(EXPORT_FOLDER, name_new_excel)):
+                self.logger.info("Copied example file to: {}".format(os.path.join(EXPORT_FOLDER, name_new_excel)))
+            else:
+                self.logger.error("Could not copy example file to: ".format(os.path.join(EXPORT_FOLDER, name_new_excel)))
+                return
+        except Exception as e:
+            handle_excep(e)
+
+        self._fill_excel_file(new_excel_file)
+
+    def _fill_excel_file(self, excel_file):
+        """
+        Fills new excel file with two tables for a current overview and for a new table to print
+        :param excel_file: Path, new excel file
+        :return: None
+        """
+
+        workbook = opxl.load_workbook(filename=excel_file)
+        workbook.copy_worksheet(workbook.active)  # copy example sheet
+        if len(workbook.sheetnames) != 2:
+            self.logger.error("Example file does not have two sheets, can not be used as standard file!")
+            return
+        workbook[workbook.sheetnames[0]].title = "Stand " + str(self.today)
+        workbook[workbook.sheetnames[1]].title = "Neue Tabelle " + str(self.today)
+
+        # fill first sheet with current state
+        counter = EXCEL_START_ROW
+        for person in self.persons_data:
+            workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['room'], counter)].value = person.room
+            workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['name'], counter)].value = person.name
+            workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['balance'], counter)].value = person.balance
+            workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['new_beer'], counter)].value = person.new_beer
+            workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['new_radler'], counter)].value = person.new_radler
+            workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['new_mate'], counter)].value = person.new_mate
+            workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['new_pali'], counter)].value = person.new_pali
+            workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['new_spezi'], counter)].value = person.new_spezi
+            workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['beers'], counter)].value = person.beers
+            workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['radler'], counter)].value = person.radler
+            workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['mate'], counter)].value = person.mate
+            workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['pali'], counter)].value = person.pali
+            workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['spezi'], counter)].value = person.spezi
+            counter += 1
+
+        # # styles, color every second row
+        # print(opxl.styles.colors.COLOR_INDEX)
+        # for i in range(EXCEL_START_ROW + 1, len(self.persons_data) + EXCEL_START_ROW, 2):
+        #     print(i)
+        #     for elem in STD_COLS:
+        #         workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS[elem], i)].font(color=opxl.styles.colors.COLOR_INDEX[3])
+
+        # centering everything except name and room
+        # for i in range(EXCEL_START_ROW, len(self.persons_data) + EXCEL_START_ROW):
+        #     for elem in STD_COLS:
+        #         if elem != 'name' and elem != 'room':
+        #             workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS[elem], i)].style.alignment.horizontal = 'center'
+        #         elif elem == 'name':
+        #             workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS[elem], i)].style.alignment.horizontal = 'left'
+        #         elif elem == 'room':
+        #             workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS[elem], i)].style.alignment.horizontal = 'right'
+        #     workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['balance'], i)].style.openpyxl.styles.Font().bold = True
+
+        # fill second sheet with new table to print
+        counter = EXCEL_START_ROW
+        for person in self.persons_data:
+            data = {'room': person.room, 'name': person.name, 'balance': person.balance, 'beers': person.beers + person.new_beer, 'radler': person.radler + person.new_radler, 'mate': person.mate + person.new_mate, 'pali': person.pali + person.new_pali, 'spezi': person.spezi + person.new_spezi}
+            for elem in data:
+                if data[elem]:
+                    workbook[workbook.sheetnames[1]]['{}{}'.format(STD_COLS[elem], counter)].value = data[elem]
+            counter += 1
+
+            # workbook[workbook.sheetnames[1]]['{}{}'.format(STD_COLS['room'], counter)].value = person.room
+            # workbook[workbook.sheetnames[1]]['{}{}'.format(STD_COLS['name'], counter)].value = person.name
+            # workbook[workbook.sheetnames[1]]['{}{}'.format(STD_COLS['balance'], counter)].value = person.balance
+            # workbook[workbook.sheetnames[1]]['{}{}'.format(STD_COLS['beers'], counter)].value = person.beers + person.new_beer
+            # workbook[workbook.sheetnames[1]]['{}{}'.format(STD_COLS['radler'], counter)].value = person.radler + person.new_radler
+            # workbook[workbook.sheetnames[1]]['{}{}'.format(STD_COLS['mate'], counter)].value = person.mate + person.new_mate
+            # workbook[workbook.sheetnames[1]]['{}{}'.format(STD_COLS['pali'], counter)].value = person.pali + person.new_pali
+            # workbook[workbook.sheetnames[1]]['{}{}'.format(STD_COLS['spezi'], counter)].value = person.spezi + person.new_spezi
+            # counter += 1
+
+        try:
+            workbook.save(excel_file)
+        except Exception as e:
+            handle_excep(e)
+            self.logger.error("Could not save file, maybe opened!")
+            from tkinter import messagebox
+            tk.messagebox.showerror('Fehler, Zugriff verweigert!', "Excel Datei konnte nicht gespeichert werden, ist vielleicht geöffnet?!")
+
+    def _read_excel_file(self, excel_file, excel_sheet, child=None):
+        """
+        Reads content from selected excel file and selected worksheet, destroys child if given, reloads person buttons in root
+        :param excel_file: Path, excel file to read
+        :param excel_sheet: String, name of worksheet to read, first if only one in document
+        :param child: Tk.Toplevel(), Optional if more than one sheet found, gets destroyed
+        :return: None
+        """
+
+        extracted_data = []
+        self.logger.info("Selected worksheet: {}".format(excel_sheet))
+        if child is not None:
+            child.destroy()
+
+        # read person data while name cell is not empty
+        workbook = opxl.load_workbook(filename=excel_file)
+        row_counter = EXCEL_START_ROW
+        cells_to_read = ('name', 'room', 'balance', 'beers', 'radler', 'mate', 'pali', 'spezi')
+        while workbook[excel_sheet]['B{}'.format(row_counter)].value != '' and workbook[excel_sheet]['B{}'.format(row_counter)].value is not None:
+            cells = []
+            for elem in cells_to_read:
+                if workbook[excel_sheet]['{}{}'.format(STD_COLS[elem], row_counter)].value is not None:
+                    cells.append(workbook[excel_sheet]['{}{}'.format(STD_COLS[elem], row_counter)].value)
+                else:
+                    cells.append(STD_VALUES[elem])
+
+            extracted_data.append(Person(cells[0], room=cells[1], balance=cells[2], beers=cells[3], radler=cells[4], mate=cells[5], pali=cells[6], spezi=cells[7]))
+            self.logger.debug("Extracted | " + str(extracted_data[-1]))
+            row_counter += 1
+
+        self.logger.info("Extracted data for {} person(s)".format(row_counter-EXCEL_START_ROW))
+        self.persons_data = extracted_data
+        self._create_person_btns()
+
+    def _get_person_data_by_name(self, name):
+        """
+        Returns list index of person by name
+        :param name: String, name of person, same as in excel file
+        :return: Integer, index in list self.persons_data
+        """
+        for index, elem in enumerate(self.persons_data):
+            if self.persons_data[index].name == name:
+                return index
+
+    def _cb_edit_person(self, name):
+        """
+        Callback for person buttons, Creates child window for editing data for a person
+        :param name: String, name of person, text of button
+        :return: None
+        """
+        person = self.persons_data[self._get_person_data_by_name(name)]
+
+        # build child window to insert information
+        self.logger.debug("Build child window for editing person data for: {} in room {}".format(person.name, person.room))
+        child = tk.Toplevel()
+        child.resizable(False, False)
+        tk.Canvas(child, height=250, width=175).pack()
+        child.title("{} - Zimmer: {}".format(person.name, person.room))
+        child.wm_iconbitmap(bitmap=resource_path(os.path.join(RESOURCE_FOLDER, "child_icon.ico")))
+        tk.Label(child, image=tk.PhotoImage(file=resource_path(os.path.join(RESOURCE_FOLDER, "edit_per_child.png")))).place(relwidth=1, relheight=1)
+
+        # child elements
+        spacer = 0.025
+        heigth_elem = 0.055
+        tk.Label(child, anchor='c', text='Eingezahlt').place(relx=0.1, rely=spacer, relwidth=0.8, relheight=heigth_elem)
+        balance_entry = tk.Entry(child)
+        balance_entry.place(relx=0.1, rely=spacer+heigth_elem, relwidth=0.8, relheight=heigth_elem)
+
+        tk.Label(child, anchor='c', text='Bier').place(relx=0.1, rely=spacer*2+heigth_elem*2, relwidth=0.8, relheight=heigth_elem)
+        beer_entry = tk.Entry(child)
+        beer_entry.place(relx=0.1, rely=spacer*2+heigth_elem*3, relwidth=0.8, relheight=heigth_elem)
+
+        tk.Label(child, anchor='c', text='Radler').place(relx=0.1, rely=spacer*3+heigth_elem*4, relwidth=0.8, relheight=heigth_elem)
+        radler_entry = tk.Entry(child)
+        radler_entry.place(relx=0.1, rely=spacer*3+heigth_elem*5, relwidth=0.8, relheight=heigth_elem)
+
+        tk.Label(child, anchor='c', text='Mate').place(relx=0.1, rely=spacer*4+heigth_elem*6, relwidth=0.8, relheight=heigth_elem)
+        mate_entry = tk.Entry(child)
+        mate_entry.place(relx=0.1, rely=spacer*4+heigth_elem*7, relwidth=0.8, relheight=heigth_elem)
+
+        tk.Label(child, anchor='c', text='Pali').place(relx=0.1, rely=spacer*5+heigth_elem*8, relwidth=0.8, relheight=heigth_elem)
+        pali_entry = tk.Entry(child)
+        pali_entry.place(relx=0.1, rely=spacer*5+heigth_elem*9, relwidth=0.8, relheight=heigth_elem)
+
+        tk.Label(child, anchor='c', text='Spezi').place(relx=0.1, rely=spacer*6+heigth_elem*10, relwidth=0.8, relheight=heigth_elem)
+        spezi_entry = tk.Entry(child)
+        spezi_entry.place(relx=0.1, rely=spacer*6+heigth_elem*11, relwidth=0.8, relheight=heigth_elem)
+
+        enter_btn = tk.Button(child, anchor='c', text="Bestätigen", font=("Helvetica 8 bold"), bd=4, bg='gray', command=lambda: self._update_person_information(child, person.name, balance_entry.get(), beer_entry.get(), radler_entry.get(), mate_entry.get(), pali_entry.get(), spezi_entry.get()))
+        enter_btn.place(relx=spacer*2, rely=1-spacer-heigth_elem*1.5, relwidth=0.45, relheight=heigth_elem*1.5)
+        delete_person_btn = tk.Button(child, anchor='c', font=("Helvetica 8 bold"), bd=4, bg='gray', text="Löschen", command=lambda: self._cb_delete_person(child, name))
+        delete_person_btn.place(relx=1-spacer-0.45, rely=1-spacer-heigth_elem*1.5, relwidth=0.45, relheight=heigth_elem*1.5)
+
+    def _update_person_information(self, child, name, amount, beers, radler, mate, pali, spezi):
+        """
+        Callback after finishing updating person, Updates data for a person
+        :param child: Tk.Toplevel(), child window to destroy
+        :param name: String, name of person
+        :param amount: Float, payed amount of money
+        :param beers: Integer, new beers
+        :param radler: Integer, new radler
+        :param mate: Integer, new mate
+        :param pali: Integer, new pali
+        :param spezi: Integer, new spezi
+        :return: None
+        """
+        try:
+            # handle empty inputs
+            make_int = {'beers': beers, 'radler': radler, 'mate': mate, 'pali': pali, 'spezi': spezi}
+            for elem in make_int:
+                if not make_int[elem]:
+                    make_int[elem] = 0
+                else:
+                    make_int[elem] = int(make_int[elem])
+            if amount == '':
+                amount = 0
+            else:
+                amount = round(float(amount.replace(',', '.')), 2)  # can only convert dot type float
+
+            self.persons_data[self._get_person_data_by_name(name)].add_money(amount=amount)
+            self.persons_data[self._get_person_data_by_name(name)].add_drinks(beers=make_int['beers'], radler=make_int['radler'], mate=make_int['mate'], pali=make_int['pali'], spezi=make_int['spezi'])
+            self.persons_data[self._get_person_data_by_name(name)].bill_drinks(prices=self.prices, beers=make_int['beers'], radler=make_int['radler'], mate=make_int['mate'], pali=make_int['pali'], spezi=make_int['spezi'])
+            self.persons_data[self._get_person_data_by_name(name)].updated = True
+            self.person_btns[self._get_person_data_by_name(name)].config(bg='lightgreen')
+            child.destroy()
+        except Exception as e:
+            handle_excep(e)
+            from tkinter import messagebox
+            messagebox.showerror('Fehler', "Could not update Person Information! Check Input")
+
+    def _cb_open_help(self, help_file):
+        """
+        Opens help file from container or folder
+        :return: None
+        """
+        try:
+            help_file = resource_path(help_file)
+            if os.path.isfile(help_file):
+                import subprocess
+                subprocess.Popen([help_file], shell=True)
+            else:
+                self.logger.error("Could not find help file!: {}".format(help_file))
+        except Exception as e:
+            handle_excep(e)
 
 
 class Person:
     """ Represents one person, holding all corresponding information """
 
-    def __init__(self, name, room='', other='', balance=0, beers=0, radler=0, mate=0, pali=0, spezi=0):
+    def __init__(self, name, room='', balance=0, beers=0, radler=0, mate=0, pali=0, spezi=0):
         """
 
         :param name: String, name
         :param room: String, roomnumber
-        :param other: String, additional data for example 'extern' or 'Untermieter/UM'
         :param balance: Float, money account
         :param beers: Integer, number of beers
         :param radler: Integer, number of radler
@@ -103,22 +585,26 @@ class Person:
         """
         self.name = name
         self.room = room
-        self.other = other
         self.balance = balance
         self.beers = beers
         self.radler = radler
         self.mate = mate
         self.pali = pali
         self.spezi = spezi
+        self.new_beer = 0
+        self.new_radler = 0
+        self.new_mate = 0
+        self.new_pali = 0
+        self.new_spezi = 0
+        self.updated = False
         self.logger = logging.Logger()
 
     @staticmethod
-    def new_person(name, room, other='', balance=0, beers=0, radler=0, mate=0, pali=0, spezi=0):
+    def new_person(name, room, balance=0, beers=0, radler=0, mate=0, pali=0, spezi=0):
         """
         Creates new instance of person
         :param name: String, name
         :param room: String, roomnumber
-        :param other: String, additional data for example 'extern' or 'Untermieter/UM'
         :param balance: Float, money account
         :param beers: Integer, number of beers
         :param radler: Integer, number of radler
@@ -126,24 +612,35 @@ class Person:
         :param pali: Integer, number of pali
         :param spezi: Integer, number of spezi
         """
-        return Person(name, room=room, other=other, balance=balance, beers=beers, radler=radler, mate=mate, pali=pali, spezi=spezi)
+        return Person(name, room=room, balance=balance, beers=beers, radler=radler, mate=mate, pali=pali, spezi=spezi)
+
+    def bill_drinks(self, prices, beers, radler, mate, pali, spezi):
+        """ Reduces balance by cost of given drinks """
+        amount = 0.0
+        amount += prices.beer*beers
+        amount += prices.radler*radler
+        amount += prices.mate*mate
+        amount += prices.pali*pali
+        amount += prices.spezi*spezi
+        self.balance -= float(round(amount, 2))
+        self.logger.info('{} | Billed for drinks:  {} Euro'.format(self.name, amount))
 
     def add_drinks(self, beers, radler, mate, pali, spezi):
         """ Adds drinks to person """
-        self.beers += beers
-        self.radler += radler
-        self.mate += mate
-        self.pali += pali
-        self.spezi += spezi
+        self.new_beer = int(beers)
+        self.new_radler = int(radler)
+        self.new_mate = int(mate)
+        self.new_pali = int(pali)
+        self.new_spezi = int(spezi)
         self.logger.info("{} | Added {} Bier, {} Radler {} Mate, {} Pali, {} Spezi".format(self.name, beers, radler, mate, pali, spezi))
 
     def add_money(self, amount):
         """ adds money to balance of user """
-        self.balance += amount
-        self.logger.info("{} | Added {} Euro to new amount of {}".format(self.name, amount, self.balance))
+        self.balance += float(round(amount, 2))
+        self.logger.info("{} | Added {} Euro to {} Euro to new amount of {}".format(self.name, amount, self.balance-amount, self.balance))
 
     def __str__(self):
-        return "Person | Name: {}, Room: {}, other: {}, balance: {}, Bier: {}, Radler: {}, Mate: {}, Pali: {}, Spezi: {}".format(self.name, self.room, self.other, self.balance, self.beers, self.radler, self.mate, self.pali, self.spezi)
+        return "Person | Name: {}, Room: {}, balance: {}, Bier: {}, Radler: {}, Mate: {}, Pali: {}, Spezi: {}".format(self.name, self.room, self.balance, self.beers, self.radler, self.mate, self.pali, self.spezi)
 
     def __repr__(self):
         return '\n' + self.__str__() + '\n'
@@ -163,6 +660,7 @@ class SettingsGroup:
 
 
 if __name__ == '__main__':
+    print("----- Starte Bierhelper Tool ----- \n")
     print("Starting tool ....")
     tool = BierListeTool()
     print("\t ... Done")

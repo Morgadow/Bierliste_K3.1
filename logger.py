@@ -151,7 +151,8 @@ class Logger(Borg):
 
         Borg.__init__(self)  # monostate pattern
         if self.__dict__:  # to avoid changing settings with every new instance through default values after one instance is created init will be skipped
-            self._logger_note('DEBUG', "New instance created, but a borg version already exists. Inputs will be ignored!")
+            # self._logger_note('DEBUG', "New instance created, but a borg version already exists. Inputs will be ignored!")
+            pass
         else:
 
             # default possible log levels
