@@ -21,6 +21,9 @@ from tkinter import messagebox
 # todo button sytles auslagern als global?
 # todo style: statistik fett gedruckt, 0er werden nicht geschrieben
 # todo bevor fill new excel try to sort --> k3.1 on top, room descending
+# todo reorganize pictures and stuff --> example file and settings.ini in hauptordner
+# todo background für child setzen --> notfalls mit farbe
+
 
 # version
 __major__ = 1  # for major interface/format changes
@@ -41,11 +44,11 @@ HELP_FILE = 'Anleitung.pdf'
 EXCEL_START_ROW = 3
 STD_VALUES = {'room': '', 'balance': 0.0, 'beers': 0, 'radler': 0, 'mate': 0, 'pali': 0, 'spezi': 0}
 STD_COLS = {'room': 'A', 'name': 'B', 'balance': 'C',  'new_beer': 'D', 'new_radler': 'E', 'new_mate': 'F', 'new_pali': 'G', 'new_spezi': 'H',  'beers': 'I', 'radler': 'J', 'mate': 'K', 'pali': 'L', 'spezi': 'M'}
+ROOMS_OWN_KITCHEN = ('310', '311', '312', '313', '314', '315', '316', '317', '318', '319', '349')
 
 # size of main self.root (optimal sizes for chosen background image)
 HEIGHT = 450
 WIDTH = 600
-
 
 def handle_excep(exception, with_tb=True):
     """ prints exception """
@@ -124,6 +127,7 @@ class BierListeTool:
             self.prices.mate = float(config.get('Preise', 'Mate'))
             self.prices.pali = float(config.get('Preise', 'Pali'))
             self.prices.spezi = float(config.get('Preise', 'Spezi'))
+            self.prices.add_charge = float(config.get('Preise', 'Aufpreis_Externe'))
 
             self.logger.info("Successfully imported pricelist!")
             self.logger.debug("Preise | Bier: {}, Radler: {}, Mate: {}, Pali: {}, Spezi: {}".format(self.prices.beer, self.prices.radler, self.prices.mate, self.prices.pali, self.prices.spezi))
@@ -254,10 +258,11 @@ class BierListeTool:
         self.logger.debug("Build child window for new person:")
         child = tk.Toplevel()
         child.resizable(False, False)
-        tk.Canvas(child, height=200, width=150).pack()
+        canvas = tk.Canvas(child, height=200, width=150)
+        canvas.pack()
         child.title("Lege neue Person an")
         child.wm_iconbitmap(bitmap=resource_path(os.path.join(RESOURCE_FOLDER, "child_icon.ico")))
-        background_image = tk.PhotoImage(file=resource_path(os.path.join(RESOURCE_FOLDER, "new_per_child.png")))
+        background_image = tk.PhotoImage(file=resource_path(os.path.join(RESOURCE_FOLDER, "new_per_background.png")))
         tk.Label(child, image=background_image).place(relwidth=1, relheight=1)
 
         top, spacer, elem_height = 0.2, 0.025, 0.1
@@ -477,38 +482,39 @@ class BierListeTool:
         # build child window to insert information
         self.logger.debug("Build child window for editing person data for: {} in room {}".format(person.name, person.room))
         child = tk.Toplevel()
-        child.resizable(False, False)
-        tk.Canvas(child, height=250, width=175).pack()
         child.title("{} - Zimmer: {}".format(person.name, person.room))
+        child.resizable(False, False)
+        tk.Canvas(child, height=250, width=150).pack()
         child.wm_iconbitmap(bitmap=resource_path(os.path.join(RESOURCE_FOLDER, "child_icon.ico")))
-        tk.Label(child, image=tk.PhotoImage(file=resource_path(os.path.join(RESOURCE_FOLDER, "edit_per_child.png")))).place(relwidth=1, relheight=1)
+        background_image = tk.PhotoImage(file=resource_path(os.path.join(RESOURCE_FOLDER, "edit_child_background.png")))
+        tk.Label(child, image=background_image).place(relwidth=1, relheight=1)
 
         # child elements
         spacer = 0.025
         heigth_elem = 0.055
-        tk.Label(child, anchor='c', text='Eingezahlt').place(relx=0.1, rely=spacer, relwidth=0.8, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Eingezahlt').place(relx=0.3, rely=spacer, relwidth=0.4, relheight=heigth_elem)
         balance_entry = tk.Entry(child)
-        balance_entry.place(relx=0.1, rely=spacer+heigth_elem, relwidth=0.8, relheight=heigth_elem)
+        balance_entry.place(relx=0.4, rely=spacer+heigth_elem, relwidth=0.2, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Bier').place(relx=0.1, rely=spacer*2+heigth_elem*2, relwidth=0.8, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Bier').place(relx=0.4, rely=spacer*2+heigth_elem*2, relwidth=0.2, relheight=heigth_elem)
         beer_entry = tk.Entry(child)
-        beer_entry.place(relx=0.1, rely=spacer*2+heigth_elem*3, relwidth=0.8, relheight=heigth_elem)
+        beer_entry.place(relx=0.4, rely=spacer*2+heigth_elem*3, relwidth=0.2, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Radler').place(relx=0.1, rely=spacer*3+heigth_elem*4, relwidth=0.8, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Radler').place(relx=0.35, rely=spacer*3+heigth_elem*4, relwidth=0.3, relheight=heigth_elem)
         radler_entry = tk.Entry(child)
-        radler_entry.place(relx=0.1, rely=spacer*3+heigth_elem*5, relwidth=0.8, relheight=heigth_elem)
+        radler_entry.place(relx=0.4, rely=spacer*3+heigth_elem*5, relwidth=0.2, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Mate').place(relx=0.1, rely=spacer*4+heigth_elem*6, relwidth=0.8, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Mate').place(relx=0.4, rely=spacer*4+heigth_elem*6, relwidth=0.2, relheight=heigth_elem)
         mate_entry = tk.Entry(child)
-        mate_entry.place(relx=0.1, rely=spacer*4+heigth_elem*7, relwidth=0.8, relheight=heigth_elem)
+        mate_entry.place(relx=0.4, rely=spacer*4+heigth_elem*7, relwidth=0.2, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Pali').place(relx=0.1, rely=spacer*5+heigth_elem*8, relwidth=0.8, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Pali').place(relx=0.4, rely=spacer*5+heigth_elem*8, relwidth=0.2, relheight=heigth_elem)
         pali_entry = tk.Entry(child)
-        pali_entry.place(relx=0.1, rely=spacer*5+heigth_elem*9, relwidth=0.8, relheight=heigth_elem)
+        pali_entry.place(relx=0.4, rely=spacer*5+heigth_elem*9, relwidth=0.2, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Spezi').place(relx=0.1, rely=spacer*6+heigth_elem*10, relwidth=0.8, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Spezi').place(relx=0.4, rely=spacer*6+heigth_elem*10, relwidth=0.2, relheight=heigth_elem)
         spezi_entry = tk.Entry(child)
-        spezi_entry.place(relx=0.1, rely=spacer*6+heigth_elem*11, relwidth=0.8, relheight=heigth_elem)
+        spezi_entry.place(relx=0.4, rely=spacer*6+heigth_elem*11, relwidth=0.2, relheight=heigth_elem)
 
         enter_btn = tk.Button(child, anchor='c', text="Bestätigen", font=("Helvetica 8 bold"), bd=4, bg='gray', command=lambda: self._update_person_information(child, person.name, balance_entry.get(), beer_entry.get(), radler_entry.get(), mate_entry.get(), pali_entry.get(), spezi_entry.get()))
         enter_btn.place(relx=spacer*2, rely=1-spacer-heigth_elem*1.5, relwidth=0.45, relheight=heigth_elem*1.5)
@@ -623,7 +629,10 @@ class Person:
         amount += prices.pali*pali
         amount += prices.spezi*spezi
         self.balance -= float(round(amount, 2))
-        self.logger.info('{} | Billed for drinks:  {} Euro'.format(self.name, amount))
+        self.logger.info('{} | Billed for drinks:  {} Euro. New balance: {} Euro'.format(self.name, amount, self.balance))
+        if str(self.room) not in ROOMS_OWN_KITCHEN:
+            self.balance -= float(round((beers + radler + mate + pali + spezi)*prices.add_charge, 2))
+            self.logger.info('{} | Additional extern charge of {} for {} drinks: {} Euro to new balance of {} Euro'.format(self.name, prices.add_charge, beers + radler + mate + pali + spezi, float(round((beers + radler + mate + pali + spezi)*prices.add_charge, 2)), self.balance))
 
     def add_drinks(self, beers, radler, mate, pali, spezi):
         """ Adds drinks to person """
@@ -637,10 +646,10 @@ class Person:
     def add_money(self, amount):
         """ adds money to balance of user """
         self.balance += float(round(amount, 2))
-        self.logger.info("{} | Added {} Euro to {} Euro to new amount of {}".format(self.name, amount, self.balance-amount, self.balance))
+        self.logger.info("{} | Added {} Euro to {} Euro to new amount of {} Euro".format(self.name, amount, self.balance-amount, self.balance))
 
     def __str__(self):
-        return "Person | Name: {}, Room: {}, balance: {}, Bier: {}, Radler: {}, Mate: {}, Pali: {}, Spezi: {}".format(self.name, self.room, self.balance, self.beers, self.radler, self.mate, self.pali, self.spezi)
+        return "Person | Name: {}, Room: {}, balance: {} Euro, Bier: {}, Radler: {}, Mate: {}, Pali: {}, Spezi: {}".format(self.name, self.room, self.balance, self.beers, self.radler, self.mate, self.pali, self.spezi)
 
     def __repr__(self):
         return '\n' + self.__str__() + '\n'
