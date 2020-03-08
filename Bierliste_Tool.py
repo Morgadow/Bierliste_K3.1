@@ -16,19 +16,13 @@ from tkinter import messagebox
 # todo export excel "Neue Tabelle 12.01.2020" --> format
 # todo format: second line gray, all lines, statistic + balance bold
 # todo hilfe/readme file.pfd mit anleitung
-# todo version info und create excecutible
-# todo child backgrounds
 # todo button sytles auslagern als global?
-# todo style: statistik fett gedruckt, 0er werden nicht geschrieben
-# todo bevor fill new excel try to sort --> k3.1 on top, room descending
-# todo reorganize pictures and stuff --> example file and settings.ini in hauptordner
-# todo background für child setzen --> notfalls mit farbe
 
 
 # version
 __major__ = 1  # for major interface/format changes
 __minor__ = 0  # for minor interface/format changes
-__release__ = 0  # for tweaks, bug-fixes, or development
+__release__ = 1  # for tweaks, bug-fixes, or development
 __version__ = '%d.%d.%d' % (__major__, __minor__, __release__)
 __version_info__ = tuple([int(num) for num in __version__.split('.')])
 __author__ = "Simon Schmid"
@@ -40,6 +34,7 @@ RESOURCE_FOLDER = 'resources'
 EXPORT_FOLDER = 'Bierlisten'
 EXAMPLE_EXCEL = 'Example_file.xlsx'
 HELP_FILE = 'Anleitung.pdf'
+SMALL_LABEL_FONT = "Helvetica 9 bold"
 
 EXCEL_START_ROW = 3
 STD_VALUES = {'room': '', 'balance': 0.0, 'beers': 0, 'radler': 0, 'mate': 0, 'pali': 0, 'spezi': 0}
@@ -49,6 +44,7 @@ ROOMS_OWN_KITCHEN = ('310', '311', '312', '313', '314', '315', '316', '317', '31
 # size of main self.root (optimal sizes for chosen background image)
 HEIGHT = 450
 WIDTH = 600
+
 
 def handle_excep(exception, with_tb=True):
     """ prints exception """
@@ -97,7 +93,7 @@ class BierListeTool:
         self.prices.mate = None
         self.prices.pali = None
         self.prices.spezi = None
-        self.read_settings_file(os.path.join(RESOURCE_FOLDER, SETTINGS_FILE))
+        self.read_settings_file(SETTINGS_FILE)
 
         self.today = datetime.datetime.now().strftime('%d.%m.%Y')
 
@@ -154,13 +150,13 @@ class BierListeTool:
             self.logger.error("Konnte Hintergrund oder Icon nicht setzen, stelle sicher, dass die Dateien im Ordner liegen!")
             handle_excep(e)
 
-        import_excel_btn = tk.Button(self.root, bd=5, font=("Helvetica 9 bold"), bg='gray', text="Import Excel", command=lambda: self._import_excel())
+        import_excel_btn = tk.Button(self.root, bd=5, font=SMALL_LABEL_FONT, bg='gray', text="Import Excel", command=lambda: self._import_excel())
         import_excel_btn.place(relx=0.2125, rely=0.9, relwidth=0.175, relheight=0.075)
 
-        export_excel_btn = tk.Button(self.root, font=("Helvetica 9 bold"), bd=5, bg='gray', text="Export to Excel", command=lambda: self._export_excel())
+        export_excel_btn = tk.Button(self.root, font=SMALL_LABEL_FONT, bd=5, bg='gray', text="Export to Excel", command=lambda: self._export_excel())
         export_excel_btn.place(relx=0.6125, rely=0.9, relwidth=0.175, relheight=0.075)
 
-        new_person_btn = tk.Button(self.root, font=("Helvetica 9 bold"), bd=5, bg='gray', text="Neuer Drinker", command=lambda: self._cb_new_person())
+        new_person_btn = tk.Button(self.root, font=SMALL_LABEL_FONT, bd=5, bg='gray', text="Neuer Drinker", command=lambda: self._cb_new_person())
         new_person_btn.place(relx=0.4125, rely=0.9, relwidth=0.175, relheight=0.075)
 
         # help and credits
@@ -179,7 +175,9 @@ class BierListeTool:
 
         # choose excel file over filedialog
         excel_file = select_file()
-        if excel_file is not None:
+        if excel_file is None:
+            self.logger.error("No file selected for import!")
+        else:
 
             # select sheet in excel
             workbook = opxl.load_workbook(filename=excel_file)
@@ -195,14 +193,12 @@ class BierListeTool:
                 tk.Canvas(child, height=150, width=350).pack()
                 child.title("Select Excel Sheet")
                 child.wm_iconbitmap(bitmap=resource_path(os.path.join(RESOURCE_FOLDER, "child_icon.ico")))
-                background_image = tk.PhotoImage(file=resource_path(os.path.join(RESOURCE_FOLDER, "new_per_child.png")))
-                tk.Label(child, image=background_image).place(relwidth=1, relheight=1)
+                tk.Label(child, bg='lightgrey').place(relwidth=1, relheight=1)
 
-                side, top, spacer, elem_width, elem_height = 0.0, 0.01, 0.033, 0.45, 0.175
+                side, top, spacer, elem_width, elem_height = 0.0, 0.05, 0.033, 0.45, 0.175
                 sheet_btns = []
                 for index, elem in enumerate(workbook.sheetnames):
-                    sheet_btns.append(tk.Button(child, text=elem, font='Helvetica 9', bg='gray', bd=2,
-                                                command=lambda c=index: self._read_excel_file(excel_file, sheet_btns[c].cget('text'), child)))
+                    sheet_btns.append(tk.Button(child, text=elem, font='Helvetica 9', bg='gray', bd=2, command=lambda c=index: self._read_excel_file(excel_file, sheet_btns[c].cget('text'), child)))
                     sheet_btns[-1].place(relx=side + spacer, rely=top, relwidth=elem_width, relheight=elem_height)
                     side += elem_width + spacer
                     if index % 2:
@@ -216,12 +212,11 @@ class BierListeTool:
         try:
             for btn in self.person_btns:
                 btn.destroy()
-        except Exception as e:  # throws error when called first time
+        except:  # throws error when called first time
             pass
         self.person_btns = []
         for i in range(len(self.persons_data)):
             self.person_btns.append(tk.Button(self.root, font="Helvetica 8 bold", text=self.persons_data[i].name, command=lambda c=i: self._cb_edit_person(self.person_btns[c].cget('text'))))
-            # self.person_btns.append(tk.Button(self.root, text=self.persons_data[i].name, command=lambda c=i: self._cb_edit_person(self.person_btns[c].cget('text'))))
             if self.persons_data[i].updated:
                 self.person_btns[i].config(bg='lightgreen')
             else:
@@ -262,21 +257,20 @@ class BierListeTool:
         canvas.pack()
         child.title("Lege neue Person an")
         child.wm_iconbitmap(bitmap=resource_path(os.path.join(RESOURCE_FOLDER, "child_icon.ico")))
-        background_image = tk.PhotoImage(file=resource_path(os.path.join(RESOURCE_FOLDER, "new_per_background.png")))
-        tk.Label(child, image=background_image).place(relwidth=1, relheight=1)
+        tk.Label(child, bg='lightgrey').place(relwidth=1, relheight=1)
 
-        top, spacer, elem_height = 0.2, 0.025, 0.1
+        top, spacer, elem_height = 0.15, 0.025, 0.1
 
         # child elements
-        tk.Label(child, text='Name').place(relx=0.1, rely=top+spacer, relheight=elem_height, relwidth=0.8)
+        tk.Label(child, text='Name', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.1, rely=top+spacer, relheight=elem_height, relwidth=0.8)
         name_entry = tk.Entry(child)
         name_entry.place(relx=0.1, rely=top+spacer+elem_height, relheight=elem_height, relwidth=0.8)
 
-        tk.Label(child, text='Zimmer').place(relx=0.1, rely=top+spacer*2+elem_height*2, relheight=elem_height, relwidth=0.8)
+        tk.Label(child, text='Zimmer', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.1, rely=top+spacer*2+elem_height*2, relheight=elem_height, relwidth=0.8)
         room_entry = tk.Entry(child)
         room_entry.place(relx=0.1, rely=top+spacer*2+elem_height*3, relheight=elem_height, relwidth=0.8)
 
-        enter_btn = tk.Button(child, text="Bestätigen", bd=4, font="Helvetica 9 bold", bg="gray", command=lambda: self._create_new_person_func(child, name_entry.get(), room_entry.get()))
+        enter_btn = tk.Button(child, text="Bestätigen", bd=4, font=SMALL_LABEL_FONT, bg="gray", command=lambda: self._create_new_person_func(child, name_entry.get(), room_entry.get()))
         enter_btn.place(relx=(1-0.6)/2, rely=1-spacer*2-elem_height*1.75, relheight=elem_height*1.5, relwidth=0.6)
 
     def _create_new_person_func(self, child, new_name, new_room):
@@ -338,7 +332,7 @@ class BierListeTool:
 
         # move example file and rename
         try:
-            shutil.copy2(os.path.join(RESOURCE_FOLDER, EXAMPLE_EXCEL), os.path.join(EXPORT_FOLDER, name_new_excel))
+            shutil.copy2(EXAMPLE_EXCEL, os.path.join(EXPORT_FOLDER, name_new_excel))
             if os.path.isfile(os.path.join(EXPORT_FOLDER, name_new_excel)):
                 self.logger.info("Copied example file to: {}".format(os.path.join(EXPORT_FOLDER, name_new_excel)))
             else:
@@ -484,41 +478,39 @@ class BierListeTool:
         child = tk.Toplevel()
         child.title("{} - Zimmer: {}".format(person.name, person.room))
         child.resizable(False, False)
-        tk.Canvas(child, height=250, width=150).pack()
+        tk.Canvas(child, height=250, width=175).pack()
         child.wm_iconbitmap(bitmap=resource_path(os.path.join(RESOURCE_FOLDER, "child_icon.ico")))
-        background_image = tk.PhotoImage(file=resource_path(os.path.join(RESOURCE_FOLDER, "edit_child_background.png")))
-        tk.Label(child, image=background_image).place(relwidth=1, relheight=1)
+        tk.Label(child, bg='lightgrey').place(relwidth=1, relheight=1)
 
         # child elements
-        spacer = 0.025
-        heigth_elem = 0.055
-        tk.Label(child, anchor='c', text='Eingezahlt').place(relx=0.3, rely=spacer, relwidth=0.4, relheight=heigth_elem)
+        spacer, heigth_elem = 0.025, 0.055
+        tk.Label(child, anchor='c', text='Eingezahlt', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.3, rely=spacer, relwidth=0.4, relheight=heigth_elem)
         balance_entry = tk.Entry(child)
-        balance_entry.place(relx=0.4, rely=spacer+heigth_elem, relwidth=0.2, relheight=heigth_elem)
+        balance_entry.place(relx=0.3, rely=spacer+heigth_elem, relwidth=0.4, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Bier').place(relx=0.4, rely=spacer*2+heigth_elem*2, relwidth=0.2, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Bier', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.4, rely=spacer*2+heigth_elem*2, relwidth=0.2, relheight=heigth_elem)
         beer_entry = tk.Entry(child)
-        beer_entry.place(relx=0.4, rely=spacer*2+heigth_elem*3, relwidth=0.2, relheight=heigth_elem)
+        beer_entry.place(relx=0.3, rely=spacer*2+heigth_elem*3, relwidth=0.4, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Radler').place(relx=0.35, rely=spacer*3+heigth_elem*4, relwidth=0.3, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Radler', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.35, rely=spacer*3+heigth_elem*4, relwidth=0.3, relheight=heigth_elem)
         radler_entry = tk.Entry(child)
-        radler_entry.place(relx=0.4, rely=spacer*3+heigth_elem*5, relwidth=0.2, relheight=heigth_elem)
+        radler_entry.place(relx=0.3, rely=spacer*3+heigth_elem*5, relwidth=0.4, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Mate').place(relx=0.4, rely=spacer*4+heigth_elem*6, relwidth=0.2, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Mate', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.4, rely=spacer*4+heigth_elem*6, relwidth=0.2, relheight=heigth_elem)
         mate_entry = tk.Entry(child)
-        mate_entry.place(relx=0.4, rely=spacer*4+heigth_elem*7, relwidth=0.2, relheight=heigth_elem)
+        mate_entry.place(relx=0.3, rely=spacer*4+heigth_elem*7, relwidth=0.4, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Pali').place(relx=0.4, rely=spacer*5+heigth_elem*8, relwidth=0.2, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Pali', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.4, rely=spacer*5+heigth_elem*8, relwidth=0.2, relheight=heigth_elem)
         pali_entry = tk.Entry(child)
-        pali_entry.place(relx=0.4, rely=spacer*5+heigth_elem*9, relwidth=0.2, relheight=heigth_elem)
+        pali_entry.place(relx=0.3, rely=spacer*5+heigth_elem*9, relwidth=0.4, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Spezi').place(relx=0.4, rely=spacer*6+heigth_elem*10, relwidth=0.2, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Spezi', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.4, rely=spacer*6+heigth_elem*10, relwidth=0.2, relheight=heigth_elem)
         spezi_entry = tk.Entry(child)
-        spezi_entry.place(relx=0.4, rely=spacer*6+heigth_elem*11, relwidth=0.2, relheight=heigth_elem)
+        spezi_entry.place(relx=0.3, rely=spacer*6+heigth_elem*11, relwidth=0.4, relheight=heigth_elem)
 
-        enter_btn = tk.Button(child, anchor='c', text="Bestätigen", font=("Helvetica 8 bold"), bd=4, bg='gray', command=lambda: self._update_person_information(child, person.name, balance_entry.get(), beer_entry.get(), radler_entry.get(), mate_entry.get(), pali_entry.get(), spezi_entry.get()))
+        enter_btn = tk.Button(child, text="Bestätigen", anchor='c', font=SMALL_LABEL_FONT, bd=4, bg='gray', command=lambda: self._update_person_information(child, person.name, balance_entry.get(), beer_entry.get(), radler_entry.get(), mate_entry.get(), pali_entry.get(), spezi_entry.get()))
         enter_btn.place(relx=spacer*2, rely=1-spacer-heigth_elem*1.5, relwidth=0.45, relheight=heigth_elem*1.5)
-        delete_person_btn = tk.Button(child, anchor='c', font=("Helvetica 8 bold"), bd=4, bg='gray', text="Löschen", command=lambda: self._cb_delete_person(child, name))
+        delete_person_btn = tk.Button(child, text='Löschen', anchor='c', font=SMALL_LABEL_FONT, bd=4, bg='gray', command=lambda: self._cb_delete_person(child, name))
         delete_person_btn.place(relx=1-spacer-0.45, rely=1-spacer-heigth_elem*1.5, relwidth=0.45, relheight=heigth_elem*1.5)
 
     def _update_person_information(self, child, name, amount, beers, radler, mate, pali, spezi):
@@ -647,6 +639,16 @@ class Person:
         """ adds money to balance of user """
         self.balance += float(round(amount, 2))
         self.logger.info("{} | Added {} Euro to {} Euro to new amount of {} Euro".format(self.name, amount, self.balance-amount, self.balance))
+
+    def change_room(self, new_room):
+        """
+        Changes room of person
+        :param new_room: String, new room
+        :return: None
+        """
+        if str(new_room) != '':
+            self.logger.info("{} | Changed room from {} to {}".format(self.name, self.room, new_room))
+            self.room = new_room
 
     def __str__(self):
         return "Person | Name: {}, Room: {}, balance: {} Euro, Bier: {}, Radler: {}, Mate: {}, Pali: {}, Spezi: {}".format(self.name, self.room, self.balance, self.beers, self.radler, self.mate, self.pali, self.spezi)

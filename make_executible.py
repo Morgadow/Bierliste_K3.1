@@ -14,8 +14,8 @@ print("")
 if not os.path.exists(os.path.join("Executible", 'v' + __version__)):
     print("Preparing folder " + 'v' + __version__)
     os.makedirs(os.path.join("Executible", 'v' + __version__))
-    shutil.copyfile(os.path.join("resources", "Example_file.xlsx"), os.path.join("Executible", 'v' + __version__, "Example_file.xlsx"))
-    shutil.copyfile(os.path.join("resources", "settings.ini"), os.path.join("Executible", 'v' + __version__, "settings.ini"))
+    shutil.copyfile("Example_file.xlsx", os.path.join("Executible", 'v' + __version__, "Example_file.xlsx"))
+    shutil.copyfile("settings.ini", os.path.join("Executible", 'v' + __version__, "settings.ini"))
 else:
     print("Folder already exists, file will be replaced!")
     if os.path.exists(os.path.join("Executible", 'v' + __version__, "{}.exe".format(PROJECT_NAME))):

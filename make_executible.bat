@@ -7,7 +7,6 @@ pyinstaller --name Bierliste_Tool^
    --add-data "%cd%\resources\icon.ico";"." ^
    --add-data "%cd%\resources\child_icon.ico";"." ^
    --add-data "%cd%\resources\background.png";"." ^
-   --add-data "%cd%\resources\child_background.png";"." ^
    --add-data "%cd%\Anleitung.pdf";"." ^
    --icon "%cd%\resources\icon.ico" ^
    .\Bierliste_Tool.py
