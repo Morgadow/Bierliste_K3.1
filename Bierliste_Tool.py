@@ -464,6 +464,7 @@ class BierListeTool:
         for index, elem in enumerate(self.persons_data):
             if self.persons_data[index].name == name:
                 return index
+        return None
 
     def _cb_edit_person(self, name):
         """
@@ -483,30 +484,31 @@ class BierListeTool:
         tk.Label(child, bg='lightgrey').place(relwidth=1, relheight=1)
 
         # child elements
-        spacer, heigth_elem = 0.025, 0.055
-        tk.Label(child, anchor='c', text='Eingezahlt', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.3, rely=spacer, relwidth=0.4, relheight=heigth_elem)
+        top, spacer, heigth_elem = 0.1, 0.025, 0.05
+        tk.Label(child, anchor='c', text='{} - {}'.format(person.name, person.room), bg='lightgrey', fg='gray21', font="Helvetica 9 bold italic").place(relx=0.1, rely=spacer, relwidth=0.8, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Eingezahlt', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.3, rely=spacer+top, relwidth=0.4, relheight=heigth_elem)
         balance_entry = tk.Entry(child)
-        balance_entry.place(relx=0.3, rely=spacer+heigth_elem, relwidth=0.4, relheight=heigth_elem)
+        balance_entry.place(relx=0.3, rely=spacer+heigth_elem+top, relwidth=0.4, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Bier', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.4, rely=spacer*2+heigth_elem*2, relwidth=0.2, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Bier', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.4, rely=spacer*2+heigth_elem*2+top, relwidth=0.2, relheight=heigth_elem)
         beer_entry = tk.Entry(child)
-        beer_entry.place(relx=0.3, rely=spacer*2+heigth_elem*3, relwidth=0.4, relheight=heigth_elem)
+        beer_entry.place(relx=0.3, rely=spacer*2+heigth_elem*3+top, relwidth=0.4, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Radler', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.35, rely=spacer*3+heigth_elem*4, relwidth=0.3, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Radler', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.35, rely=spacer*3+heigth_elem*4+top, relwidth=0.3, relheight=heigth_elem)
         radler_entry = tk.Entry(child)
-        radler_entry.place(relx=0.3, rely=spacer*3+heigth_elem*5, relwidth=0.4, relheight=heigth_elem)
+        radler_entry.place(relx=0.3, rely=spacer*3+heigth_elem*5+top, relwidth=0.4, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Mate', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.4, rely=spacer*4+heigth_elem*6, relwidth=0.2, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Mate', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.4, rely=spacer*4+heigth_elem*6+top, relwidth=0.2, relheight=heigth_elem)
         mate_entry = tk.Entry(child)
-        mate_entry.place(relx=0.3, rely=spacer*4+heigth_elem*7, relwidth=0.4, relheight=heigth_elem)
+        mate_entry.place(relx=0.3, rely=spacer*4+heigth_elem*7+top, relwidth=0.4, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Pali', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.4, rely=spacer*5+heigth_elem*8, relwidth=0.2, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Pali', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.4, rely=spacer*5+heigth_elem*8+top, relwidth=0.2, relheight=heigth_elem)
         pali_entry = tk.Entry(child)
-        pali_entry.place(relx=0.3, rely=spacer*5+heigth_elem*9, relwidth=0.4, relheight=heigth_elem)
+        pali_entry.place(relx=0.3, rely=spacer*5+heigth_elem*9+top, relwidth=0.4, relheight=heigth_elem)
 
-        tk.Label(child, anchor='c', text='Spezi', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.4, rely=spacer*6+heigth_elem*10, relwidth=0.2, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='Spezi', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.4, rely=spacer*6+heigth_elem*10+top, relwidth=0.2, relheight=heigth_elem)
         spezi_entry = tk.Entry(child)
-        spezi_entry.place(relx=0.3, rely=spacer*6+heigth_elem*11, relwidth=0.4, relheight=heigth_elem)
+        spezi_entry.place(relx=0.3, rely=spacer*6+heigth_elem*11+top, relwidth=0.4, relheight=heigth_elem)
 
         enter_btn = tk.Button(child, text="Bestätigen", anchor='c', font=SMALL_LABEL_FONT, bd=4, bg='gray', command=lambda: self._update_person_information(child, person.name, balance_entry.get(), beer_entry.get(), radler_entry.get(), mate_entry.get(), pali_entry.get(), spezi_entry.get()))
         enter_btn.place(relx=spacer*2, rely=1-spacer-heigth_elem*1.5, relwidth=0.45, relheight=heigth_elem*1.5)
@@ -581,8 +583,8 @@ class Person:
         :param pali: Integer, number of pali
         :param spezi: Integer, number of spezi
         """
-        self.name = name
-        self.room = room
+        self.name = name.strip()
+        self.room = room.strip()
         self.balance = balance
         self.beers = beers
         self.radler = radler
@@ -610,7 +612,7 @@ class Person:
         :param pali: Integer, number of pali
         :param spezi: Integer, number of spezi
         """
-        return Person(name, room=room, balance=balance, beers=beers, radler=radler, mate=mate, pali=pali, spezi=spezi)
+        return Person(name.strip(), room=room.strip(), balance=balance, beers=beers, radler=radler, mate=mate, pali=pali, spezi=spezi)
 
     def bill_drinks(self, prices, beers, radler, mate, pali, spezi):
         """ Reduces balance by cost of given drinks """
