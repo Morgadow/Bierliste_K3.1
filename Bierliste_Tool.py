@@ -673,5 +673,9 @@ class SettingsGroup:
 if __name__ == '__main__':
     print("----- Starte Bierhelper Tool ----- \n")
     print("Starting tool ....")
+    if not os.path.exists(SETTINGS_FILE) or not os.path.exists(EXAMPLE_EXCEL):
+        print("ERROR: Settings file '{}' or Example file '{}' not found!".format(SETTINGS_FILE, EXAMPLE_EXCEL))
+        os.system("pause")
+        raise FileNotFoundError("ERROR: Settings file '{}' or Example file '{}' not found!".format(SETTINGS_FILE, EXAMPLE_EXCEL))
     tool = BierListeTool()
     print("\t ... Done")
