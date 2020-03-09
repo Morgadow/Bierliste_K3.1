@@ -79,6 +79,26 @@ def select_file():
         return None
 
 
+def ask_user_yn(message):
+    """
+    Asks user message 'message' and returns true/y or false/n
+    :param message: String, question to ask
+    :return: Boolean, response
+    """
+    try:
+        while True:
+            raw_in = input(message.strip() + ' (y/n) ')
+            if raw_in == 'y':
+                logging.Logger.static_debug("User response for question '{}': True".format(message.strip))
+                return True
+            elif raw_in == 'n':
+                logging.Logger.static_debug("User response for question '{}': False".format(message.strip))
+                return False
+    except Exception as e:
+        handle_excep(e)
+        return None
+
+
 class BierListeTool:
 
     def __init__(self):
@@ -130,6 +150,21 @@ class BierListeTool:
         except Exception as e:
             self.logger.error("Could not read Settings file!")
             handle_excep(e, with_tb=True)
+
+    @staticmethod
+    def generate_default_settingfile():
+        with open(os.path.join(os.getcwd(), SETTINGS_FILE), 'w+') as ini_file:
+            ini_file.write('[Preise]' + '\n')
+            ini_file.write('Bier = 1.00' + '\n')
+            ini_file.write('Radler = 1.00' + '\n')
+            ini_file.write('Mate = 1.00' + '\n')
+            ini_file.write('Pali = 1.00' + '\n')
+            ini_file.write('Spezi = 1.00' + '\n')
+            ini_file.write('Aufpreis_Externe = 0.05' + '\n')
+            if os.path.exists(os.path.join(os.getcwd(), SETTINGS_FILE)):
+                logging.Logger.static_info("Generated default {} file".format(SETTINGS_FILE))
+            else:
+                logging.Logger.static_error("Could not generate default {} file".format(SETTINGS_FILE))
 
     def _build_GUI(self):
         """ Builds gui and holds mainloop """
@@ -675,9 +710,13 @@ class SettingsGroup:
 if __name__ == '__main__':
     print("----- Starte Bierhelper Tool ----- \n")
     print("Starting tool ....")
-    if not os.path.exists(SETTINGS_FILE) or not os.path.exists(EXAMPLE_EXCEL):
+    if not os.path.exists(SETTINGS_FILE) :
+        if ask_user_yn("No settings file found, generate default one?"):
+            BierListeTool.generate_default_settingfile()
+    if not os.path.exists(EXAMPLE_EXCEL) or not os.path.exists(SETTINGS_FILE):
         print("ERROR: Settings file '{}' or Example file '{}' not found!".format(SETTINGS_FILE, EXAMPLE_EXCEL))
         os.system("pause")
-        raise FileNotFoundError("ERROR: Settings file '{}' or Example file '{}' not found!".format(SETTINGS_FILE, EXAMPLE_EXCEL))
+        raise FileNotFoundError("Settings file '{}' or Example file '{}' not found!".format(SETTINGS_FILE, EXAMPLE_EXCEL))
+
     tool = BierListeTool()
     print("\t ... Done")
