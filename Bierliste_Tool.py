@@ -5,22 +5,19 @@ import os
 import sys
 import datetime
 import shutil
-import tkinter as tk
-import openpyxl as opxl
-from configparser import ConfigParser
-import logger as logging
-from tkinter import messagebox
-
-
-# todo export excel sheet "Stand 12.01.2020" --> format
-# todo export excel "Neue Tabelle 12.01.2020" --> format
-# todo format: second line gray, all lines, statistic + balance bold
-# todo hilfe/readme file.pfd mit anleitung
-# todo button sytles auslagern als global?
+import lib.logger as logging
+try:
+    import tkinter as tk
+    from tkinter import messagebox
+    import openpyxl as opxl
+    from configparser import ConfigParser
+except Exception as e:
+    print(e)
+    print("Please install dependencies: {}".format('\n\t- '.join(('tkinter', 'openpyxl', 'configparser'))))
 
 
 # version
-__major__ = 1  # for major interface/format changes
+__major__ = 0  # for major interface/format changes
 __minor__ = 0  # for minor interface/format changes
 __release__ = 1  # for tweaks, bug-fixes, or development
 __version__ = '%d.%d.%d' % (__major__, __minor__, __release__)
@@ -30,7 +27,6 @@ __date__ = '13.01.2020'
 
 # globals
 SETTINGS_FILE = "settings.ini"
-RESOURCE_FOLDER = 'resources'
 EXPORT_FOLDER = 'Bierlisten'
 EXAMPLE_EXCEL = 'Example_file.xlsx'
 HELP_FILE = 'Anleitung.pdf'
@@ -103,23 +99,37 @@ class BierListeTool:
 
     def __init__(self):
 
-        os.system("cls")
-        self.logger = logging.Logger(level='DEBUG')
-        self.logger.info("----- Starte Bierhelper Tool ----- \n")
+        try:  # some builds fails mysteriously
 
-        self.prices = SettingsGroup()
-        self.prices.beer = None
-        self.prices.radler = None
-        self.prices.mate = None
-        self.prices.pali = None
-        self.prices.spezi = None
-        self.read_settings_file(SETTINGS_FILE)
+            os.system("cls")
+            self.logger = logging.Logger(level=logging.DEBUG)
+            self.logger.info("----- Starte Bierhelper Tool ----- \n")
 
-        self.today = datetime.datetime.now().strftime('%d.%m.%Y')
+            self.prices = SettingsGroup()
+            self.prices.beer = None
+            self.prices.radler = None
+            self.prices.mate = None
+            self.prices.pali = None
+            self.prices.spezi = None
+            self.read_settings_file(SETTINGS_FILE)
 
-        self.persons_data = []
+            self.today = datetime.datetime.now().strftime('%d.%m.%Y')
 
-        self._build_GUI()
+            self.persons_data = []
+
+            self._build_GUI()
+
+        except Exception as e:
+            handle_excep(e)
+            logging.static_critical("Could not build GUI from this path, copy to local system and retry!")
+            print("CRITICAL: Could not build GUI from this path, start with START.bat or copy to local system and retry!")
+            print("Alternatively, start tool via the terminal")
+            print("\t1) Open the terminal with 'cmd' in startmenu")
+            print("\t2) navigate to scriptpath with command: 'pushd [Scriptpath]'")
+            print("\t3) Start tool with command: Bierliste_Tool.py")
+            print("\t4) If no Python version is installed please try START.bat")
+            print("")
+            os.system("pause")
 
     def read_settings_file(self, settings_file):
         """
@@ -178,8 +188,8 @@ class BierListeTool:
 
         # background label for background image and program icon
         try:
-            self.root.wm_iconbitmap(bitmap=resource_path(os.path.join(RESOURCE_FOLDER, "icon.ico")))
-            background_image = tk.PhotoImage(file=resource_path(os.path.join(RESOURCE_FOLDER, "background.png")))
+            self.root.wm_iconbitmap(bitmap=resource_path("gui\\icon.ico"))
+            background_image = tk.PhotoImage(file=resource_path("gui\\background.png"))
             tk.Label(self.root, image=background_image).place(relwidth=1, relheight=1)
         except Exception as e:
             self.logger.error("Konnte Hintergrund oder Icon nicht setzen, stelle sicher, dass die Dateien im Ordner liegen!")
@@ -227,7 +237,7 @@ class BierListeTool:
                 child.resizable(False, False)
                 tk.Canvas(child, height=150, width=350).pack()
                 child.title("Select Excel Sheet")
-                child.wm_iconbitmap(bitmap=resource_path(os.path.join(RESOURCE_FOLDER, "child_icon.ico")))
+                child.wm_iconbitmap(bitmap=resource_path("gui\\icon.ico"))
                 tk.Label(child, bg='lightgrey').place(relwidth=1, relheight=1)
 
                 side, top, spacer, elem_width, elem_height = 0.0, 0.05, 0.033, 0.45, 0.175
@@ -291,7 +301,7 @@ class BierListeTool:
         canvas = tk.Canvas(child, height=200, width=150)
         canvas.pack()
         child.title("Lege neue Person an")
-        child.wm_iconbitmap(bitmap=resource_path(os.path.join(RESOURCE_FOLDER, "child_icon.ico")))
+        child.wm_iconbitmap(bitmap=resource_path("gui\\icon.ico"))
         tk.Label(child, bg='lightgrey').place(relwidth=1, relheight=1)
 
         top, spacer, elem_height = 0.15, 0.025, 0.1
@@ -392,6 +402,8 @@ class BierListeTool:
             return
         workbook[workbook.sheetnames[0]].title = "Stand " + str(self.today)
         workbook[workbook.sheetnames[1]].title = "Neue Tabelle " + str(self.today)
+        workbook[workbook.sheetnames[0]]['M1'].value = self.today
+        workbook[workbook.sheetnames[1]]['M1'].value = self.today
 
         # fill first sheet with current state
         counter = EXCEL_START_ROW
@@ -515,7 +527,7 @@ class BierListeTool:
         child.title("{} - Zimmer: {}".format(person.name, person.room))
         child.resizable(False, False)
         tk.Canvas(child, height=250, width=175).pack()
-        child.wm_iconbitmap(bitmap=resource_path(os.path.join(RESOURCE_FOLDER, "child_icon.ico")))
+        child.wm_iconbitmap(bitmap=resource_path("gui\\icon.ico"))
         tk.Label(child, bg='lightgrey').place(relwidth=1, relheight=1)
 
         # child elements
@@ -710,7 +722,7 @@ class SettingsGroup:
 if __name__ == '__main__':
     print("----- Starte Bierhelper Tool ----- \n")
     print("Starting tool ....")
-    if not os.path.exists(SETTINGS_FILE) :
+    if not os.path.exists(SETTINGS_FILE):
         if ask_user_yn("No settings file found, generate default one?"):
             BierListeTool.generate_default_settingfile()
     if not os.path.exists(EXAMPLE_EXCEL) or not os.path.exists(SETTINGS_FILE):

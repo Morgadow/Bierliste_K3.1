@@ -22,7 +22,7 @@ else:
         os.remove(os.path.join("Executible", 'v' + __version__, "{}.exe".format(PROJECT_NAME)))
 
 print("\nMake executible:")
-os.system("make_executible.bat")
+os.system("mk_exe.bat")
 
 # give programm some time to finish task
 time.sleep(5)
