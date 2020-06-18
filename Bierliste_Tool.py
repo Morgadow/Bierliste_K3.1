@@ -6,6 +6,8 @@ import sys
 import datetime
 import shutil
 import lib.logger as logging
+import math
+from lib.install_dep import DEPENDECIES, install_dep
 try:
     import tkinter as tk
     from tkinter import messagebox
@@ -13,8 +15,20 @@ try:
     from configparser import ConfigParser
 except Exception as e:
     print(e)
-    print("Please install dependencies: {}".format('\n\t- '.join(('tkinter', 'openpyxl', 'configparser'))))
+    print("Missing dependencies, proceeding to install {} packages:".format(len(DEPENDECIES)))
+    install_dep()
 
+# todo format ausgabe excel tabellen
+# todo Stand_XX do not print nulls
+# todo bug: nur eine person mit gleichem namen erlaubt (ID zuweisen?)
+# todo fenster person ändern (zimmer, name, ...)
+# todo fenster schöner machen, hintergrund, buttons, ...
+# todo geld übertragen runden --> neu machen
+# todo additional extern charge in bill drinks
+# todo pillow resize image und childs mit background
+# todo exe mit data
+# todo excel example in container --> generate default
+# todo küche in Titel excel string
 
 # version
 __major__ = 0  # for major interface/format changes
@@ -26,6 +40,7 @@ __author__ = "Simon Schmid"
 __date__ = '13.01.2020'
 
 # globals
+LOG_LEVEL = logging.DEBUG
 SETTINGS_FILE = "settings.ini"
 EXPORT_FOLDER = 'Bierlisten'
 EXAMPLE_EXCEL = 'Example_file.xlsx'
@@ -44,10 +59,10 @@ WIDTH = 600
 
 def handle_excep(exception, with_tb=True):
     """ prints exception """
-    logging.Logger.static_critical(exception)
+    logging.static_critical(exception)
     if with_tb:
         import traceback
-        logging.Logger.static_critical(traceback.format_exc())
+        logging.static_critical(traceback.format_exc())
 
 
 def resource_path(relative_path):
@@ -65,13 +80,13 @@ def select_file():
         from tkinter import filedialog
         file = os.path.normpath(os.path.abspath(filedialog.askopenfilename(title="Select file", filetypes=(("Excel file", "*.xlsx *.xls *xlsm"), ("Alle Dateien", "*.*")))))
         if file is not None and file != '' and os.path.isfile(file):
-            logging.Logger.static_info("Selected file: {}".format(file))
+            logging.static_info("Selected file: {}".format(file))
             return file
         else:
-            logging.Logger.static_warning("Keine Datei gewählt!")
+            logging.static_warning("Keine Datei gewählt!")
             return None
-    except Exception as e:
-        handle_excep(e, with_tb=True)
+    except Exception as exp:
+        handle_excep(exp, with_tb=True)
         return None
 
 
@@ -85,25 +100,24 @@ def ask_user_yn(message):
         while True:
             raw_in = input(message.strip() + ' (y/n) ')
             if raw_in == 'y':
-                logging.Logger.static_debug("User response for question '{}': True".format(message.strip))
+                logging.static_debug("User response for question '{}': True".format(message.strip))
                 return True
             elif raw_in == 'n':
-                logging.Logger.static_debug("User response for question '{}': False".format(message.strip))
+                logging.static_debug("User response for question '{}': False".format(message.strip))
                 return False
-    except Exception as e:
-        handle_excep(e)
+    except Exception as exp:
+        handle_excep(exp)
         return None
 
 
+# noinspection PyBroadException
 class BierListeTool:
 
     def __init__(self):
 
         try:  # some builds fails mysteriously
 
-            os.system("cls")
-            self.logger = logging.Logger(level=logging.DEBUG)
-            self.logger.info("----- Starte Bierhelper Tool ----- \n")
+            self.logger = logging.Logger(level=LOG_LEVEL)
 
             self.prices = SettingsGroup()
             self.prices.beer = None
@@ -119,8 +133,8 @@ class BierListeTool:
 
             self._build_GUI()
 
-        except Exception as e:
-            handle_excep(e)
+        except Exception as ex:
+            handle_excep(ex)
             logging.static_critical("Could not build GUI from this path, copy to local system and retry!")
             print("CRITICAL: Could not build GUI from this path, start with START.bat or copy to local system and retry!")
             print("Alternatively, start tool via the terminal")
@@ -157,12 +171,13 @@ class BierListeTool:
 
             self.logger.info("Successfully imported pricelist!")
             self.logger.debug("Preise | Bier: {}, Radler: {}, Mate: {}, Pali: {}, Spezi: {}".format(self.prices.beer, self.prices.radler, self.prices.mate, self.prices.pali, self.prices.spezi))
-        except Exception as e:
+        except Exception as ex:
             self.logger.error("Could not read Settings file!")
-            handle_excep(e, with_tb=True)
+            handle_excep(ex, with_tb=True)
 
     @staticmethod
     def generate_default_settingfile():
+        """ generate default ini settingsfile in scriptfolder """
         with open(os.path.join(os.getcwd(), SETTINGS_FILE), 'w+') as ini_file:
             ini_file.write('[Preise]' + '\n')
             ini_file.write('Bier = 1.00' + '\n')
@@ -172,9 +187,9 @@ class BierListeTool:
             ini_file.write('Spezi = 1.00' + '\n')
             ini_file.write('Aufpreis_Externe = 0.05' + '\n')
             if os.path.exists(os.path.join(os.getcwd(), SETTINGS_FILE)):
-                logging.Logger.static_info("Generated default {} file".format(SETTINGS_FILE))
+                logging.static_info("Generated default {} file".format(SETTINGS_FILE))
             else:
-                logging.Logger.static_error("Could not generate default {} file".format(SETTINGS_FILE))
+                logging.static_error("Could not generate default {} file".format(SETTINGS_FILE))
 
     def _build_GUI(self):
         """ Builds gui and holds mainloop """
@@ -191,9 +206,10 @@ class BierListeTool:
             self.root.wm_iconbitmap(bitmap=resource_path("gui\\icon.ico"))
             background_image = tk.PhotoImage(file=resource_path("gui\\background.png"))
             tk.Label(self.root, image=background_image).place(relwidth=1, relheight=1)
-        except Exception as e:
-            self.logger.error("Konnte Hintergrund oder Icon nicht setzen, stelle sicher, dass die Dateien im Ordner liegen!")
-            handle_excep(e)
+        except Exception:
+            self.root.wm_iconbitmap(bitmap=resource_path("icon.ico"))
+            background_image = tk.PhotoImage(file=resource_path("background.png"))
+            tk.Label(self.root, image=background_image).place(relwidth=1, relheight=1)
 
         import_excel_btn = tk.Button(self.root, bd=5, font=SMALL_LABEL_FONT, bg='gray', text="Import Excel", command=lambda: self._import_excel())
         import_excel_btn.place(relx=0.2125, rely=0.9, relwidth=0.175, relheight=0.075)
@@ -205,7 +221,7 @@ class BierListeTool:
         new_person_btn.place(relx=0.4125, rely=0.9, relwidth=0.175, relheight=0.075)
 
         # help and credits
-        help_btn = tk.Button(self.root, text="Hilfe", bg='lightgrey', bd=2, command=lambda: self._cb_open_help(HELP_FILE))
+        help_btn = tk.Button(self.root, text="Hilfe", bg='lightgrey', bd=2, command=lambda: self._open_file(HELP_FILE))
         help_btn.place(relx=0.025, rely=0.925, relwidth=0.1, relheight=0.05)
         tk.Label(self.root, font=("Arial", 7), text="Version: {}".format(__version__), bg="lightgrey").place(relx=0.855, rely=0.925, relwidth=0.12, relheight=0.05)
 
@@ -230,25 +246,63 @@ class BierListeTool:
                 self._read_excel_file(excel_file, workbook.sheetnames[0])
             elif len(workbook.sheetnames) < 1:  # no sheet, should not happen
                 messagebox.showwarning('Fehler', "Keine Tabelle in Excel Datei gefunden!")
+                self.logger.error("Empty excel file!")
                 return
             else:
                 self.logger.debug("Build child window for selecting excel sheet to import:")
                 child = tk.Toplevel()
                 child.resizable(False, False)
-                tk.Canvas(child, height=150, width=350).pack()
                 child.title("Select Excel Sheet")
-                child.wm_iconbitmap(bitmap=resource_path("gui\\icon.ico"))
+                if len(workbook.sheetnames) > 2:
+                    tk.Canvas(child, height=math.ceil(len(workbook.sheetnames)/2)*25+30, width=380).pack()
+                else:
+                    tk.Canvas(child, height=45, width=380).pack()
+                tk.Label(child, bg='white').place(relwidth=1, relheight=1)
+                try:
+                    child.wm_iconbitmap(bitmap=resource_path("gui\\icon.ico"))
+                except Exception:
+                    child.wm_iconbitmap(bitmap=resource_path("icon.ico"))
                 tk.Label(child, bg='lightgrey').place(relwidth=1, relheight=1)
 
-                side, top, spacer, elem_width, elem_height = 0.0, 0.05, 0.033, 0.45, 0.175
+                top, spacer, elem_width, elem_height = 10, 10, 175, 25
                 sheet_btns = []
                 for index, elem in enumerate(workbook.sheetnames):
                     sheet_btns.append(tk.Button(child, text=elem, font='Helvetica 9', bg='gray', bd=2, command=lambda c=index: self._read_excel_file(excel_file, sheet_btns[c].cget('text'), child)))
-                    sheet_btns[-1].place(relx=side + spacer, rely=top, relwidth=elem_width, relheight=elem_height)
-                    side += elem_width + spacer
-                    if index % 2:
-                        top += spacer + elem_height
-                        side = 0
+                    sheet_btns[-1].place(x=spacer+((spacer+elem_width)*(index % 2)), y=top+(spacer+elem_height)*math.floor(index/2), width=elem_width, height=elem_height)
+
+    def _read_excel_file(self, excel_file, excel_sheet, child=None):
+        """
+        Reads content from selected excel file and selected worksheet, destroys child if given, reloads person buttons in root
+        :param excel_file: Path, excel file to read
+        :param excel_sheet: String, name of worksheet to read, first if only one in document
+        :param child: Tk.Toplevel(), Optional if more than one sheet found, gets destroyed
+        :return: None
+        """
+
+        extracted_data = []
+        self.logger.info("Selected worksheet: {}".format(excel_sheet))
+        if child is not None:
+            child.destroy()
+
+        # read person data while name cell is not empty
+        workbook = opxl.load_workbook(filename=excel_file)
+        row_counter = EXCEL_START_ROW
+        cells_to_read = ('name', 'room', 'balance', 'beers', 'radler', 'mate', 'pali', 'spezi')
+        while workbook[excel_sheet]['B{}'.format(row_counter)].value != '' and workbook[excel_sheet]['B{}'.format(row_counter)].value is not None:
+            cells = []
+            for elem in cells_to_read:
+                if workbook[excel_sheet]['{}{}'.format(STD_COLS[elem], row_counter)].value is not None:
+                    cells.append(workbook[excel_sheet]['{}{}'.format(STD_COLS[elem], row_counter)].value)
+                else:
+                    cells.append(STD_VALUES[elem])
+
+            extracted_data.append(Person(cells[0], room=cells[1], balance=cells[2], beers=cells[3], radler=cells[4], mate=cells[5], pali=cells[6], spezi=cells[7]))
+            self.logger.debug("Extracted | " + str(extracted_data[-1]))
+            row_counter += 1
+
+        self.logger.info("Extracted data for {} person(s)".format(row_counter-EXCEL_START_ROW))
+        self.persons_data = extracted_data
+        self._create_person_btns()
 
     def _create_person_btns(self):
         """ Creates buttons for all persons in root """
@@ -257,7 +311,7 @@ class BierListeTool:
         try:
             for btn in self.person_btns:
                 btn.destroy()
-        except:  # throws error when called first time
+        except Exception:  # throws error when called first time
             pass
         self.person_btns = []
         for i in range(len(self.persons_data)):
@@ -301,12 +355,14 @@ class BierListeTool:
         canvas = tk.Canvas(child, height=200, width=150)
         canvas.pack()
         child.title("Lege neue Person an")
-        child.wm_iconbitmap(bitmap=resource_path("gui\\icon.ico"))
+        try:
+            child.wm_iconbitmap(bitmap=resource_path("gui\\icon.ico"))
+        except Exception:
+            child.wm_iconbitmap(bitmap=resource_path("icon.ico"))
         tk.Label(child, bg='lightgrey').place(relwidth=1, relheight=1)
 
-        top, spacer, elem_height = 0.15, 0.025, 0.1
-
         # child elements
+        top, spacer, elem_height = 0.15, 0.025, 0.1
         tk.Label(child, text='Name', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.1, rely=top+spacer, relheight=elem_height, relwidth=0.8)
         name_entry = tk.Entry(child)
         name_entry.place(relx=0.1, rely=top+spacer+elem_height, relheight=elem_height, relwidth=0.8)
@@ -372,8 +428,8 @@ class BierListeTool:
                     return
                 else:
                     self.logger.debug("Deleted already existing file: {}".format(name_new_excel))
-            except Exception as e:
-                handle_excep(e)
+            except Exception as ex:
+                handle_excep(ex)
 
         # move example file and rename
         try:
@@ -383,8 +439,8 @@ class BierListeTool:
             else:
                 self.logger.error("Could not copy example file to: ".format(os.path.join(EXPORT_FOLDER, name_new_excel)))
                 return
-        except Exception as e:
-            handle_excep(e)
+        except Exception as ex:
+            handle_excep(ex)
 
         self._fill_excel_file(new_excel_file)
 
@@ -462,45 +518,11 @@ class BierListeTool:
 
         try:
             workbook.save(excel_file)
-        except Exception as e:
-            handle_excep(e)
+        except Exception as ex:
+            handle_excep(ex)
             self.logger.error("Could not save file, maybe opened!")
             from tkinter import messagebox
             tk.messagebox.showerror('Fehler, Zugriff verweigert!', "Excel Datei konnte nicht gespeichert werden, ist vielleicht geöffnet?!")
-
-    def _read_excel_file(self, excel_file, excel_sheet, child=None):
-        """
-        Reads content from selected excel file and selected worksheet, destroys child if given, reloads person buttons in root
-        :param excel_file: Path, excel file to read
-        :param excel_sheet: String, name of worksheet to read, first if only one in document
-        :param child: Tk.Toplevel(), Optional if more than one sheet found, gets destroyed
-        :return: None
-        """
-
-        extracted_data = []
-        self.logger.info("Selected worksheet: {}".format(excel_sheet))
-        if child is not None:
-            child.destroy()
-
-        # read person data while name cell is not empty
-        workbook = opxl.load_workbook(filename=excel_file)
-        row_counter = EXCEL_START_ROW
-        cells_to_read = ('name', 'room', 'balance', 'beers', 'radler', 'mate', 'pali', 'spezi')
-        while workbook[excel_sheet]['B{}'.format(row_counter)].value != '' and workbook[excel_sheet]['B{}'.format(row_counter)].value is not None:
-            cells = []
-            for elem in cells_to_read:
-                if workbook[excel_sheet]['{}{}'.format(STD_COLS[elem], row_counter)].value is not None:
-                    cells.append(workbook[excel_sheet]['{}{}'.format(STD_COLS[elem], row_counter)].value)
-                else:
-                    cells.append(STD_VALUES[elem])
-
-            extracted_data.append(Person(cells[0], room=cells[1], balance=cells[2], beers=cells[3], radler=cells[4], mate=cells[5], pali=cells[6], spezi=cells[7]))
-            self.logger.debug("Extracted | " + str(extracted_data[-1]))
-            row_counter += 1
-
-        self.logger.info("Extracted data for {} person(s)".format(row_counter-EXCEL_START_ROW))
-        self.persons_data = extracted_data
-        self._create_person_btns()
 
     def _get_person_data_by_name(self, name):
         """
@@ -510,6 +532,17 @@ class BierListeTool:
         """
         for index, elem in enumerate(self.persons_data):
             if self.persons_data[index].name == name:
+                return index
+        return None
+
+    def _get_person_data_by_ID(self, identifier):
+        """
+        Returns list index of person by name
+        :param id: Integer, id of Person() instance
+        :return: Integer, index in list self.persons_data
+        """
+        for index, elem in enumerate(self.persons_data):
+            if self.persons_data[index].ID == identifier:
                 return index
         return None
 
@@ -527,7 +560,10 @@ class BierListeTool:
         child.title("{} - Zimmer: {}".format(person.name, person.room))
         child.resizable(False, False)
         tk.Canvas(child, height=250, width=175).pack()
-        child.wm_iconbitmap(bitmap=resource_path("gui\\icon.ico"))
+        try:
+            child.wm_iconbitmap(bitmap=resource_path("gui\\icon.ico"))
+        except Exception:
+            child.wm_iconbitmap(bitmap=resource_path("icon.ico"))
         tk.Label(child, bg='lightgrey').place(relwidth=1, relheight=1)
 
         # child elements
@@ -557,15 +593,14 @@ class BierListeTool:
         spezi_entry = tk.Entry(child)
         spezi_entry.place(relx=0.3, rely=spacer*6+heigth_elem*11+top, relwidth=0.4, relheight=heigth_elem)
 
-        enter_btn = tk.Button(child, text="Bestätigen", anchor='c', font=SMALL_LABEL_FONT, bd=4, bg='gray', command=lambda: self._update_person_information(child, person.name, balance_entry.get(), beer_entry.get(), radler_entry.get(), mate_entry.get(), pali_entry.get(), spezi_entry.get()))
+        enter_btn = tk.Button(child, text="Bestätigen", anchor='c', font=SMALL_LABEL_FONT, bd=4, bg='gray', command=lambda: [self._update_person(person.name, balance_entry.get(), beer_entry.get(), radler_entry.get(), mate_entry.get(), pali_entry.get(), spezi_entry.get()), child.destroy()])
         enter_btn.place(relx=spacer*2, rely=1-spacer-heigth_elem*1.5, relwidth=0.45, relheight=heigth_elem*1.5)
         delete_person_btn = tk.Button(child, text='Löschen', anchor='c', font=SMALL_LABEL_FONT, bd=4, bg='gray', command=lambda: self._cb_delete_person(child, name))
         delete_person_btn.place(relx=1-spacer-0.45, rely=1-spacer-heigth_elem*1.5, relwidth=0.45, relheight=heigth_elem*1.5)
 
-    def _update_person_information(self, child, name, amount, beers, radler, mate, pali, spezi):
+    def _update_person(self, name, amount, beers, radler, mate, pali, spezi):
         """
         Callback after finishing updating person, Updates data for a person
-        :param child: Tk.Toplevel(), child window to destroy
         :param name: String, name of person
         :param amount: Float, payed amount of money
         :param beers: Integer, new beers
@@ -588,29 +623,29 @@ class BierListeTool:
             else:
                 amount = round(float(amount.replace(',', '.')), 2)  # can only convert dot type float
 
-            self.persons_data[self._get_person_data_by_name(name)].add_money(amount=amount)
+            if amount:
+                self.persons_data[self._get_person_data_by_name(name)].add_money(amount=amount)
             self.persons_data[self._get_person_data_by_name(name)].add_drinks(beers=make_int['beers'], radler=make_int['radler'], mate=make_int['mate'], pali=make_int['pali'], spezi=make_int['spezi'])
             self.persons_data[self._get_person_data_by_name(name)].bill_drinks(prices=self.prices, beers=make_int['beers'], radler=make_int['radler'], mate=make_int['mate'], pali=make_int['pali'], spezi=make_int['spezi'])
             self.persons_data[self._get_person_data_by_name(name)].updated = True
             self.person_btns[self._get_person_data_by_name(name)].config(bg='lightgreen')
-            child.destroy()
         except Exception as e:
             handle_excep(e)
-            from tkinter import messagebox
             messagebox.showerror('Fehler', "Could not update Person Information! Check Input")
 
-    def _cb_open_help(self, help_file):
+    def _open_file(self, file):
         """
-        Opens help file from container or folder
+        Opens file from container or folder
+        :param file: Path, file to open with default program
         :return: None
         """
         try:
-            help_file = resource_path(help_file)
-            if os.path.isfile(help_file):
+            file = resource_path(file)
+            if os.path.isfile(file):
                 import subprocess
-                subprocess.Popen([help_file], shell=True)
+                subprocess.Popen([file], shell=True)
             else:
-                self.logger.error("Could not find help file!: {}".format(help_file))
+                self.logger.error("Could not find file!: {}".format(file))
         except Exception as e:
             handle_excep(e)
 
@@ -630,8 +665,13 @@ class Person:
         :param pali: Integer, number of pali
         :param spezi: Integer, number of spezi
         """
+        self.updated = False
+        self.logger = logging.Logger()
+
+        self.ID = id(self)
         self.name = name.strip()
-        self.room = room.strip()
+        self.room = str(room).strip()
+        # self.id = self.generate_id()
         self.balance = balance
         self.beers = beers
         self.radler = radler
@@ -643,15 +683,13 @@ class Person:
         self.new_mate = 0
         self.new_pali = 0
         self.new_spezi = 0
-        self.updated = False
-        self.logger = logging.Logger()
 
     @staticmethod
     def new_person(name, room, balance=0, beers=0, radler=0, mate=0, pali=0, spezi=0):
         """
         Creates new instance of person
         :param name: String, name
-        :param room: String, roomnumber
+        :param room: String, room
         :param balance: Float, money account
         :param beers: Integer, number of beers
         :param radler: Integer, number of radler
@@ -659,7 +697,7 @@ class Person:
         :param pali: Integer, number of pali
         :param spezi: Integer, number of spezi
         """
-        return Person(name.strip(), room=room.strip(), balance=balance, beers=beers, radler=radler, mate=mate, pali=pali, spezi=spezi)
+        return Person(name.strip(), room=str(room).strip(), balance=balance, beers=beers, radler=radler, mate=mate, pali=pali, spezi=spezi)
 
     def bill_drinks(self, prices, beers, radler, mate, pali, spezi):
         """ Reduces balance by cost of given drinks """
@@ -687,7 +725,7 @@ class Person:
     def add_money(self, amount):
         """ adds money to balance of user """
         self.balance += float(round(amount, 2))
-        self.logger.info("{} | Added {} Euro to {} Euro to new amount of {} Euro".format(self.name, amount, self.balance-amount, self.balance))
+        self.logger.info("{} | Added {} Euro to {} Euro to new amount of {} Euro".format(self.name, round(amount, 2), round(self.balance-amount, 2), round(self.balance, 2)))
 
     def change_room(self, new_room):
         """
@@ -699,8 +737,18 @@ class Person:
             self.logger.info("{} | Changed room from {} to {}".format(self.name, self.room, new_room))
             self.room = new_room
 
+    def generate_id(self):
+        """
+        Generates a ascii based ID for an instance of Person() from name and room
+        :return: Integer, unique id of a person
+        """
+        identifier = []
+        identifier.extend([str(ord(elem)) for elem in self.name])
+        identifier.extend([str(ord(elem)) for elem in str(self.room)])
+        return int(''.join(identifier))
+
     def __str__(self):
-        return "Person | Name: {}, Room: {}, balance: {} Euro, Bier: {}, Radler: {}, Mate: {}, Pali: {}, Spezi: {}".format(self.name, self.room, self.balance, self.beers, self.radler, self.mate, self.pali, self.spezi)
+        return "Person | ID: {}, Name: {}, Room: {}, balance: {} Euro, Bier: {}, Radler: {}, Mate: {}, Pali: {}, Spezi: {}".format(self.ID, self.name, self.room, self.balance, self.beers, self.radler, self.mate, self.pali, self.spezi)
 
     def __repr__(self):
         return '\n' + self.__str__() + '\n'
@@ -720,14 +768,17 @@ class SettingsGroup:
 
 
 if __name__ == '__main__':
+    os.system("cls")
     print("----- Starte Bierhelper Tool ----- \n")
-    print("Starting tool ....")
     if not os.path.exists(SETTINGS_FILE):
         if ask_user_yn("No settings file found, generate default one?"):
             BierListeTool.generate_default_settingfile()
+    if not os.path.exists(EXAMPLE_EXCEL):
+        if os.path.exists(resource_path(EXAMPLE_EXCEL)):
+            import shutil
+            shutil.copy2(resource_path(EXAMPLE_EXCEL), os.path.join(os.getcwd(), EXAMPLE_EXCEL))
+            logging.static_debug("Copied example excel file from container to directory")
     if not os.path.exists(EXAMPLE_EXCEL) or not os.path.exists(SETTINGS_FILE):
-        print("ERROR: Settings file '{}' or Example file '{}' not found!".format(SETTINGS_FILE, EXAMPLE_EXCEL))
-        os.system("pause")
         raise FileNotFoundError("Settings file '{}' or Example file '{}' not found!".format(SETTINGS_FILE, EXAMPLE_EXCEL))
 
     tool = BierListeTool()
