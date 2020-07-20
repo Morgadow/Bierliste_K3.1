@@ -20,20 +20,17 @@ except Exception as e:
 
 # todo format ausgabe excel tabellen
 # todo Stand_XX do not print nulls
-# todo bug: nur eine person mit gleichem namen erlaubt (ID zuweisen?)
 # todo fenster person ändern (zimmer, name, ...)
 # todo fenster schöner machen, hintergrund, buttons, ...
-# todo geld übertragen runden --> neu machen
-# todo additional extern charge in bill drinks
 # todo pillow resize image und childs mit background
 # todo exe mit data
 # todo excel example in container --> generate default
-# todo küche in Titel excel string
+# todo küche aus settings in Titel excel string
 
 # version
 __major__ = 0  # for major interface/format changes
 __minor__ = 0  # for minor interface/format changes
-__release__ = 1  # for tweaks, bug-fixes, or development
+__release__ = 2  # for tweaks, bug-fixes, or development
 __version__ = '%d.%d.%d' % (__major__, __minor__, __release__)
 __version_info__ = tuple([int(num) for num in __version__.split('.')])
 __author__ = "Simon Schmid"
@@ -125,11 +122,12 @@ class BierListeTool:
             self.prices.mate = None
             self.prices.pali = None
             self.prices.spezi = None
+            self.kueche = None
             self.read_settings_file(SETTINGS_FILE)
 
             self.today = datetime.datetime.now().strftime('%d.%m.%Y')
 
-            self.persons_data = []
+            self.drinker = []  # every person
 
             self._build_GUI()
 
@@ -168,6 +166,7 @@ class BierListeTool:
             self.prices.pali = float(config.get('Preise', 'Pali'))
             self.prices.spezi = float(config.get('Preise', 'Spezi'))
             self.prices.add_charge = float(config.get('Preise', 'Aufpreis_Externe'))
+            self.kueche = config.get('General', 'Kueche').replace('"', '')
 
             self.logger.info("Successfully imported pricelist!")
             self.logger.debug("Preise | Bier: {}, Radler: {}, Mate: {}, Pali: {}, Spezi: {}".format(self.prices.beer, self.prices.radler, self.prices.mate, self.prices.pali, self.prices.spezi))
@@ -217,7 +216,7 @@ class BierListeTool:
         export_excel_btn = tk.Button(self.root, font=SMALL_LABEL_FONT, bd=5, bg='gray', text="Export to Excel", command=lambda: self._export_excel())
         export_excel_btn.place(relx=0.6125, rely=0.9, relwidth=0.175, relheight=0.075)
 
-        new_person_btn = tk.Button(self.root, font=SMALL_LABEL_FONT, bd=5, bg='gray', text="Neuer Drinker", command=lambda: self._cb_new_person())
+        new_person_btn = tk.Button(self.root, font=SMALL_LABEL_FONT, bd=5, bg='gray', text="Neuer Drinker", command=lambda: self._new_person())
         new_person_btn.place(relx=0.4125, rely=0.9, relwidth=0.175, relheight=0.075)
 
         # help and credits
@@ -301,49 +300,51 @@ class BierListeTool:
             row_counter += 1
 
         self.logger.info("Extracted data for {} person(s)".format(row_counter-EXCEL_START_ROW))
-        self.persons_data = extracted_data
-        self._create_person_btns()
+        self.drinker = extracted_data
+        self._update_drinker_btns()
 
-    def _create_person_btns(self):
+    def _update_drinker_btns(self):
         """ Creates buttons for all persons in root """
-        self.logger.debug("Starting to update player buttons:")
-        spacer, width, height = 0.025, 0.17, 0.05
-        try:
-            for btn in self.person_btns:
-                btn.destroy()
-        except Exception:  # throws error when called first time
-            pass
-        self.person_btns = []
-        for i in range(len(self.persons_data)):
-            self.person_btns.append(tk.Button(self.root, font="Helvetica 8 bold", text=self.persons_data[i].name, command=lambda c=i: self._cb_edit_person(self.person_btns[c].cget('text'))))
-            if self.persons_data[i].updated:
-                self.person_btns[i].config(bg='lightgreen')
-            else:
-                self.person_btns[i].config(bg='tomato')
 
-        # place buttons
-        for i in range(len(self.person_btns)):
-            self.person_btns[i].place(relx=(i % 5)*(spacer+width)+spacer, rely=int(i/5)*(spacer+height)+spacer, relheight=height, relwidth=width)
+        self.logger.debug("Starting to update player buttons:")
+        try:  # delete all for recreating
+            for person in self.drinker:
+                if hasattr(person, 'button'):
+                    person.button.destroy()
+        except Exception as err:  # throws error when called first time
+            handle_excep(err)
+            # pass  # first time no buttons  # todo wieder rein?
+
+        spacer, width, height = 0.025, 0.17, 0.05
+        for index, person in enumerate(self.drinker):
+            person.button = tk.Button(self.root, font="Helvetica 8 bold", text=person.name, command=lambda c=index: self._cb_edit_person(self.drinker[c]))
+            if person.updated:
+                person.button.config(bg='lightgreen')
+            else:
+                person.button.config(bg='tomato')
+
+        for index, person in enumerate(self.drinker):
+            person.button.place(relx=(index % 5)*(spacer+width)+spacer, rely=int(index/5)*(spacer+height)+spacer, relheight=height, relwidth=width)
         self.logger.info("Updated player buttons")
 
-    def _cb_delete_person(self, child, name):
+    def _delete_person(self, drinker):
         """
-        Deletes person from self.persons_data und recreates all person_btns
-        :param child: Tk.Toplevel(), child window for person
-        :param name: String, name of person
+        Deletes drinker from self.drinker und recreates all person_btns
+        :param drinker: Person(), drinker to edit
         :return: None
         """
         try:
-            self.logger.debug("Trying to delete person " + name)
-            child.destroy()
-            del self.persons_data[self._get_person_data_by_name(name)]
-            self.logger.info("Deleted person: " + str(name))
-            self._create_person_btns()
+            self.logger.debug("Trying to delete drinker:" + drinker.name)
+            for index, person in enumerate(self.drinker):
+                if person.ID == drinker.ID:
+                    del self.drinker[index]
+                    self.logger.info("Deleted drinker: " + str(drinker.name))
+                    break
         except Exception as e:
-            messagebox.showerror('Fehler', "Could not delete person " + str(name))
+            messagebox.showerror('Fehler', "Could not delete drinker:" + str(drinker.name))
             handle_excep(e)
 
-    def _cb_new_person(self):
+    def _new_person(self):
         """
         Callback for btn "New Person", Builds child window for creating a new person
         :return: None
@@ -371,10 +372,10 @@ class BierListeTool:
         room_entry = tk.Entry(child)
         room_entry.place(relx=0.1, rely=top+spacer*2+elem_height*3, relheight=elem_height, relwidth=0.8)
 
-        enter_btn = tk.Button(child, text="Bestätigen", bd=4, font=SMALL_LABEL_FONT, bg="gray", command=lambda: self._create_new_person_func(child, name_entry.get(), room_entry.get()))
+        enter_btn = tk.Button(child, text="Bestätigen", bd=4, font=SMALL_LABEL_FONT, bg="gray", command=lambda: self.__new_person_aux(child, name_entry.get(), room_entry.get()))
         enter_btn.place(relx=(1-0.6)/2, rely=1-spacer*2-elem_height*1.75, relheight=elem_height*1.5, relwidth=0.6)
 
-    def _create_new_person_func(self, child, new_name, new_room):
+    def __new_person_aux(self, child, new_name, new_room):
         """
         Callback after finishing creating a new person, realoads person buttons on root window
         :param child: Tk.Toplevel(), child window for new person to close
@@ -382,31 +383,23 @@ class BierListeTool:
         :param new_room: String, room of new person
         :return: None
         """
-
-        try:
-            if new_name:
-                # for per in self.persons_data:  # check if name is already in use
-                #     if new_name == per.name:
-                #         self.logger.warning("Name already used!")
-                #         from tkinter import messagebox
-                #         tk.messagebox.showwarning("Vorsicht", "Name wird schon verwendet!")
-                #         break
+        for drinker in self.drinker:
+            if drinker.name == new_name and drinker.room == new_room:
+                messagebox.showwarning("Bereits vorhanden", "Person ist bereits angelegt!")
                 child.destroy()
-                self.persons_data.append(Person(new_name, new_room))
-                self._create_person_btns()
-                self.logger.info("Added person with name: {}, room: {}".format(new_name, new_room))
-            else:
-                from tkinter import messagebox
-                messagebox.showwarning('Warning', "Name darf nicht leer sein!")
-        except Exception as e:
-            handle_excep(e)
-            from tkinter import messagebox
-            messagebox.showwarning('Warning', "Konnte keine Person eintragen!")
+                return
+        if new_name:
+            child.destroy()
+            self.drinker.append(Person(new_name, new_room))
+            self._update_drinker_btns()
+            self.logger.info("Added person with name: {}, room: {}".format(new_name, new_room))
+        else:
+            messagebox.showwarning('Warning', "Name darf nicht leer sein!")
 
     def _export_excel(self):
         """ Copies example file to export folder and renames it to current date, if already existing, deletes it """
 
-        name_new_excel = 'Bierliste_K31_' + str(self.today) + '.xlsx'
+        name_new_excel = 'Bierliste_' + self.kueche + '_' + str(self.today) + '.xlsx'
 
         # create export folder if not there already
         if not os.path.isdir(EXPORT_FOLDER):
@@ -463,7 +456,7 @@ class BierListeTool:
 
         # fill first sheet with current state
         counter = EXCEL_START_ROW
-        for person in self.persons_data:
+        for person in self.drinker:
             workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['room'], counter)].value = person.room
             workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['name'], counter)].value = person.name
             workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS['balance'], counter)].value = person.balance
@@ -481,13 +474,13 @@ class BierListeTool:
 
         # # styles, color every second row
         # print(opxl.styles.colors.COLOR_INDEX)
-        # for i in range(EXCEL_START_ROW + 1, len(self.persons_data) + EXCEL_START_ROW, 2):
+        # for i in range(EXCEL_START_ROW + 1, len(self.drinker) + EXCEL_START_ROW, 2):
         #     print(i)
         #     for elem in STD_COLS:
         #         workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS[elem], i)].font(color=opxl.styles.colors.COLOR_INDEX[3])
 
         # centering everything except name and room
-        # for i in range(EXCEL_START_ROW, len(self.persons_data) + EXCEL_START_ROW):
+        # for i in range(EXCEL_START_ROW, len(self.drinker) + EXCEL_START_ROW):
         #     for elem in STD_COLS:
         #         if elem != 'name' and elem != 'room':
         #             workbook[workbook.sheetnames[0]]['{}{}'.format(STD_COLS[elem], i)].style.alignment.horizontal = 'center'
@@ -499,7 +492,7 @@ class BierListeTool:
 
         # fill second sheet with new table to print
         counter = EXCEL_START_ROW
-        for person in self.persons_data:
+        for person in self.drinker:
             data = {'room': person.room, 'name': person.name, 'balance': person.balance, 'beers': person.beers + person.new_beer, 'radler': person.radler + person.new_radler, 'mate': person.mate + person.new_mate, 'pali': person.pali + person.new_pali, 'spezi': person.spezi + person.new_spezi}
             for elem in data:
                 if data[elem]:
@@ -518,46 +511,46 @@ class BierListeTool:
 
         try:
             workbook.save(excel_file)
+            self.logger.info("Saved excel file: " + os.path.basename(excel_file))
         except Exception as ex:
             handle_excep(ex)
             self.logger.error("Could not save file, maybe opened!")
             from tkinter import messagebox
             tk.messagebox.showerror('Fehler, Zugriff verweigert!', "Excel Datei konnte nicht gespeichert werden, ist vielleicht geöffnet?!")
 
-    def _get_person_data_by_name(self, name):
+    def _person_by_name(self, name):
         """
         Returns list index of person by name
         :param name: String, name of person, same as in excel file
-        :return: Integer, index in list self.persons_data
+        :return: Integer, index in list self.drinker
         """
-        for index, elem in enumerate(self.persons_data):
-            if self.persons_data[index].name == name:
-                return index
+        for index, person in enumerate(self.drinker):
+            if self.drinker[index].name == name:
+                return index, person
         return None
 
-    def _get_person_data_by_ID(self, identifier):
+    def _person_by_ID(self, drinker_id):
         """
         Returns list index of person by name
-        :param id: Integer, id of Person() instance
-        :return: Integer, index in list self.persons_data
+        :param drinker_id: Integer, id of Person() instance
+        :return: Integer, index in list self.drinker
         """
-        for index, elem in enumerate(self.persons_data):
-            if self.persons_data[index].ID == identifier:
-                return index
+        for index, person in enumerate(self.drinker):
+            if self.drinker[index].ID == drinker_id:
+                return index, person
         return None
 
-    def _cb_edit_person(self, name):
+    def _cb_edit_person(self, drinker):
         """
         Callback for person buttons, Creates child window for editing data for a person
-        :param name: String, name of person, text of button
+        :param drinker: Person(), drinker to edit
         :return: None
         """
-        person = self.persons_data[self._get_person_data_by_name(name)]
 
         # build child window to insert information
-        self.logger.debug("Build child window for editing person data for: {} in room {}".format(person.name, person.room))
+        self.logger.debug("Build child window for editing drinker data for: {} in room {}".format(drinker.name, drinker.room))
         child = tk.Toplevel()
-        child.title("{} - Zimmer: {}".format(person.name, person.room))
+        child.title("{} - Zimmer: {}".format(drinker.name, drinker.room))
         child.resizable(False, False)
         tk.Canvas(child, height=250, width=175).pack()
         try:
@@ -568,7 +561,7 @@ class BierListeTool:
 
         # child elements
         top, spacer, heigth_elem = 0.1, 0.025, 0.05
-        tk.Label(child, anchor='c', text='{} - {}'.format(person.name, person.room), bg='lightgrey', fg='gray21', font="Helvetica 9 bold italic").place(relx=0.1, rely=spacer, relwidth=0.8, relheight=heigth_elem)
+        tk.Label(child, anchor='c', text='{} - {}'.format(drinker.name, drinker.room), bg='lightgrey', fg='gray21', font="Helvetica 9 bold italic").place(relx=0.1, rely=spacer, relwidth=0.8, relheight=heigth_elem)
         tk.Label(child, anchor='c', text='Eingezahlt', bg='lightgrey', font=SMALL_LABEL_FONT).place(relx=0.3, rely=spacer+top, relwidth=0.4, relheight=heigth_elem)
         balance_entry = tk.Entry(child)
         balance_entry.place(relx=0.3, rely=spacer+heigth_elem+top, relwidth=0.4, relheight=heigth_elem)
@@ -593,15 +586,15 @@ class BierListeTool:
         spezi_entry = tk.Entry(child)
         spezi_entry.place(relx=0.3, rely=spacer*6+heigth_elem*11+top, relwidth=0.4, relheight=heigth_elem)
 
-        enter_btn = tk.Button(child, text="Bestätigen", anchor='c', font=SMALL_LABEL_FONT, bd=4, bg='gray', command=lambda: [self._update_person(person.name, balance_entry.get(), beer_entry.get(), radler_entry.get(), mate_entry.get(), pali_entry.get(), spezi_entry.get()), child.destroy()])
+        enter_btn = tk.Button(child, text="Bestätigen", anchor='c', font=SMALL_LABEL_FONT, bd=4, bg='gray', command=lambda: [self._update_person(drinker, balance_entry.get(), beer_entry.get(), radler_entry.get(), mate_entry.get(), pali_entry.get(), spezi_entry.get()), child.destroy()])
         enter_btn.place(relx=spacer*2, rely=1-spacer-heigth_elem*1.5, relwidth=0.45, relheight=heigth_elem*1.5)
-        delete_person_btn = tk.Button(child, text='Löschen', anchor='c', font=SMALL_LABEL_FONT, bd=4, bg='gray', command=lambda: self._cb_delete_person(child, name))
+        delete_person_btn = tk.Button(child, text='Löschen', anchor='c', font=SMALL_LABEL_FONT, bd=4, bg='gray', command=lambda: [self._delete_person(drinker.ID), child.destroy()])
         delete_person_btn.place(relx=1-spacer-0.45, rely=1-spacer-heigth_elem*1.5, relwidth=0.45, relheight=heigth_elem*1.5)
 
-    def _update_person(self, name, amount, beers, radler, mate, pali, spezi):
+    def _update_person(self, drinker, amount, beers, radler, mate, pali, spezi):
         """
         Callback after finishing updating person, Updates data for a person
-        :param name: String, name of person
+        :param drinker: Person(), drinker to edit
         :param amount: Float, payed amount of money
         :param beers: Integer, new beers
         :param radler: Integer, new radler
@@ -618,19 +611,20 @@ class BierListeTool:
                     make_int[elem] = 0
                 else:
                     make_int[elem] = int(make_int[elem])
+
             if amount == '':
                 amount = 0
             else:
                 amount = round(float(amount.replace(',', '.')), 2)  # can only convert dot type float
 
             if amount:
-                self.persons_data[self._get_person_data_by_name(name)].add_money(amount=amount)
-            self.persons_data[self._get_person_data_by_name(name)].add_drinks(beers=make_int['beers'], radler=make_int['radler'], mate=make_int['mate'], pali=make_int['pali'], spezi=make_int['spezi'])
-            self.persons_data[self._get_person_data_by_name(name)].bill_drinks(prices=self.prices, beers=make_int['beers'], radler=make_int['radler'], mate=make_int['mate'], pali=make_int['pali'], spezi=make_int['spezi'])
-            self.persons_data[self._get_person_data_by_name(name)].updated = True
-            self.person_btns[self._get_person_data_by_name(name)].config(bg='lightgreen')
-        except Exception as e:
-            handle_excep(e)
+                drinker.add_money(amount=amount)
+            drinker.add_drinks(beers=make_int['beers'], radler=make_int['radler'], mate=make_int['mate'], pali=make_int['pali'], spezi=make_int['spezi'])
+            drinker.bill_drinks(prices=self.prices, beers=make_int['beers'], radler=make_int['radler'], mate=make_int['mate'], pali=make_int['pali'], spezi=make_int['spezi'])
+            drinker.updated = True
+            drinker.button.config(bg='lightgreen')
+        except Exception as err:
+            handle_excep(err)
             messagebox.showerror('Fehler', "Could not update Person Information! Check Input")
 
     def _open_file(self, file):
@@ -646,8 +640,8 @@ class BierListeTool:
                 subprocess.Popen([file], shell=True)
             else:
                 self.logger.error("Could not find file!: {}".format(file))
-        except Exception as e:
-            handle_excep(e)
+        except Exception as err:
+            handle_excep(err)
 
 
 class Person:
@@ -671,7 +665,7 @@ class Person:
         self.ID = id(self)
         self.name = name.strip()
         self.room = str(room).strip()
-        # self.id = self.generate_id()
+        # self.id = self.generate_id()  # some obsolete approach, use id() instead
         self.balance = balance
         self.beers = beers
         self.radler = radler
@@ -697,7 +691,7 @@ class Person:
         :param pali: Integer, number of pali
         :param spezi: Integer, number of spezi
         """
-        return Person(name.strip(), room=str(room).strip(), balance=balance, beers=beers, radler=radler, mate=mate, pali=pali, spezi=spezi)
+        return Person(name.strip(), room=str(room).strip(), balance=round(balance, 2), beers=beers, radler=radler, mate=mate, pali=pali, spezi=spezi)
 
     def bill_drinks(self, prices, beers, radler, mate, pali, spezi):
         """ Reduces balance by cost of given drinks """
@@ -707,11 +701,11 @@ class Person:
         amount += prices.mate*mate
         amount += prices.pali*pali
         amount += prices.spezi*spezi
-        self.balance -= float(round(amount, 2))
-        self.logger.info('{} | Billed for drinks:  {} Euro. New balance: {} Euro'.format(self.name, amount, self.balance))
+        self.balance -= round(amount, 2)
+        self.logger.info('{} | Billed for drinks:  {} Euro. New balance: {} Euro'.format(self.name, amount, round(self.balance, 2)))
         if str(self.room) not in ROOMS_OWN_KITCHEN:
-            self.balance -= float(round((beers + radler + mate + pali + spezi)*prices.add_charge, 2))
-            self.logger.info('{} | Additional extern charge of {} for {} drinks: {} Euro to new balance of {} Euro'.format(self.name, prices.add_charge, beers + radler + mate + pali + spezi, float(round((beers + radler + mate + pali + spezi)*prices.add_charge, 2)), self.balance))
+            self.balance -= round((beers + radler + mate + pali + spezi)*prices.add_charge, 2)
+            self.logger.info('{} | Additional extern charge of {} for {} drinks: {} Euro to new balance of {} Euro'.format(self.name, prices.add_charge, beers + radler + mate + pali + spezi, float(round((beers + radler + mate + pali + spezi)*prices.add_charge, 2)), round(self.balance, 2)))
 
     def add_drinks(self, beers, radler, mate, pali, spezi):
         """ Adds drinks to person """
@@ -724,7 +718,7 @@ class Person:
 
     def add_money(self, amount):
         """ adds money to balance of user """
-        self.balance += float(round(amount, 2))
+        self.balance += round(amount, 2)
         self.logger.info("{} | Added {} Euro to {} Euro to new amount of {} Euro".format(self.name, round(amount, 2), round(self.balance-amount, 2), round(self.balance, 2)))
 
     def change_room(self, new_room):
@@ -748,7 +742,7 @@ class Person:
         return int(''.join(identifier))
 
     def __str__(self):
-        return "Person | ID: {}, Name: {}, Room: {}, balance: {} Euro, Bier: {}, Radler: {}, Mate: {}, Pali: {}, Spezi: {}".format(self.ID, self.name, self.room, self.balance, self.beers, self.radler, self.mate, self.pali, self.spezi)
+        return "Person | ID: {}, Name: {}, Room: {}, balance: {} Euro, Bier: {}, Radler: {}, Mate: {}, Pali: {}, Spezi: {}".format(self.ID, self.name, self.room, round(self.balance, 2), self.beers, self.radler, self.mate, self.pali, self.spezi)
 
     def __repr__(self):
         return '\n' + self.__str__() + '\n'
