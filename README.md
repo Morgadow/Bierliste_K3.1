@@ -14,8 +14,8 @@ Ablauf Tool:
 - Mit Druck auf einen Button kann eingetragen werden wieviel jeder Nutzer getrunken und/oder eingezahlt hat
 - Ist jeder eingetragen wird die Excel wieder in eine neue Liste exportiert
 - Dafür wird die Example Datei kopiert und neu befüllt mit 2 Tabellen:
- -- Eine mit den eingetragenen Werten, also alte Liste und die eingetragenen Striche
- -- Eine mit dem neuen Stand, also neues berechnetes Guthaben, das ist die Liste die wieder an den Kühlschrank kommt
+ - Eine mit den eingetragenen Werten, also alte Liste und die eingetragenen Striche
+ - Eine mit dem neuen Stand, also neues berechnetes Guthaben, das ist die Liste die wieder an den Kühlschrank kommt
 
 Hinweise:
 - Format der Excel Tabellen an der Example Datei orientieren, die Spalten und Zeilen sind fix festgelegt
