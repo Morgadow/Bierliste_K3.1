@@ -3,9 +3,13 @@
 
 import os
 
-DEPENDECIES = ('tkinter', 'openpyxl', 'ConfigParser', 'Pillow')
+DEPENDECIES = ('setuptools', 'tkintertable', 'openpyxl', 'ConfigParser', 'Pillow')
 
 def install_dep():
+
+    # update pip
+    os.system("python -m pip install --upgrade pip")
+
     for index, elem in enumerate(DEPENDECIES, 1):
         try:
             print("Installing package {} of {}: {}".format(index, len(DEPENDECIES), elem))
