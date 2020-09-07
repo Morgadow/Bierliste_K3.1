@@ -8,6 +8,7 @@ import shutil
 import lib.logger as logging
 import math
 from lib.install_dep import DEPENDECIES, install_dep
+
 try:
     import tkinter as tk
     from tkinter import messagebox
@@ -17,6 +18,13 @@ except Exception as e:
     print(e)
     print("Missing dependencies, proceeding to install {} packages:".format(len(DEPENDECIES)))
     install_dep()
+
+    import tkinter as tk
+    from tkinter import messagebox
+    import openpyxl as opxl
+    from configparser import ConfigParser
+
+
 
 # todo format ausgabe excel tabellen
 # todo Stand_XX do not print nulls
