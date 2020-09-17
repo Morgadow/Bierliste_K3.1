@@ -25,7 +25,7 @@ except Exception as e:
     from configparser import ConfigParser
 
 
-
+### Offene Todos ###
 # todo format ausgabe excel tabellen
 # todo Stand_XX do not print nulls
 # todo fenster person ändern (zimmer, name, ...)
@@ -34,6 +34,7 @@ except Exception as e:
 # todo exe mit data
 # todo excel example in container --> generate default
 # todo küche aus settings in Titel excel string
+
 
 # version
 __major__ = 0  # for major interface/format changes
